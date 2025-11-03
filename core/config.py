@@ -1,31 +1,27 @@
 import os
-import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file (must be in project root)
+# Load environment variables
 load_dotenv()
 
-"API Keys"
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+# API Keys & Model Names
+Gemini2Pro_API_KEY = os.getenv("Gemini2Pro_API_KEY", "")
+Gemini2Pro_MODEL = os.getenv("Gemini2Pro_MODEL", "models/gemini-2.5-pro")
+
+Gemini2Flash_API_KEY = os.getenv("Gemini2Flash_API_KEY", "")
+Gemini2Flash_MODEL = os.getenv("Gemini2Flash_MODEL", "models/gemini-2.5-flash")
 
 
-# Ensure the main API key is available for usage
-if GEMINI_API_KEY:
-    os.environ["Gemini_API_KEY"] = GEMINI_API_KEY
+ACTIVE_MODEL = Gemini2Pro_MODEL
+ACTIVE_API_KEY = Gemini2Pro_API_KEY
+
+MODEL_MODE = "pro"
+if MODEL_MODE == "flash":
+    ACTIVE_MODEL = Gemini2Flash_MODEL
+    ACTIVE_API_KEY = Gemini2Flash_API_KEY
 
 
-def validate_config():
-    # Check which API keys exist
-    APIs_dict = {
-        "Gemini API Key": bool(GEMINI_API_KEY),
-    }
+if ACTIVE_API_KEY:
+    os.environ["GOOGLE_API_KEY"] = ACTIVE_API_KEY
 
-    # Print status of each key
-    for key, exists in APIs_dict.items():
-        print(f"{key}: {'Found' if exists else 'Missing'}")
-
-    return True
-
-
-validate_config()
+print(f"\nModel Used: {ACTIVE_MODEL}")

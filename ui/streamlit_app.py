@@ -1,13 +1,14 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import streamlit as st
-from core import config
 from core.state import FlyerState
 from utils.summary_utils import generate_summary
-from agents.theme_agent import theme_analyzer_node, render_html_to_image
+from agents.theme_agent import display_HTML2Img
+from core.workflow import create_workflow
 
 
-def create_interface():
+
+def create_interface(model, api):
     # Page config
     st.set_page_config(
         page_title="HTML Flyer Generator",
@@ -48,18 +49,18 @@ def create_interface():
     # Layout
     col1, col2 = st.columns([1, 3])
     with col1:
-        api_provider = render_sidebar()
+        render_sidebar(model)
     with col2:
         user_prompt = render_prompt_section()
-        handle_generation(user_prompt, api_provider)
+        handle_generation(user_prompt, api)
         render_results()
         render_footer()
 
 
-def render_sidebar():
+def render_sidebar(model):
     with st.sidebar:
         st.markdown("<div class='sidebar-header'>⚙️ Settings & Quick Guide</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='card'><b>LLM Model:</b> {config.GEMINI_MODEL}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card'><b>LLM Model:</b> {model}</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='sidebar-header'>🔖 Quick Guide</div>", unsafe_allow_html=True)
         st.markdown("""
@@ -72,8 +73,6 @@ def render_sidebar():
             </ul>
         </div>
         """, unsafe_allow_html=True)
-
-    return "gemini"
 
 
 def render_prompt_section():
@@ -103,39 +102,45 @@ def generation_process(user_prompt: str, api_provider: str):
     image_path = None
 
     try:
-        status_text.info("Initializing workflow...")
+        status_text.info("🚀 Initializing workflow...")
         progress_bar.progress(10)
 
         if not user_prompt or not isinstance(user_prompt, str):
             raise ValueError("Invalid user prompt: must be a non-empty string.")
 
-        # Create FlyerState
+        # Initialize state
         state = FlyerState(user_prompt=user_prompt.strip(), api_provider=api_provider)
-        progress_bar.progress(30)
+        progress_bar.progress(20)
 
-        # Run theme analysis
-        status_text.info("Analyzing flyer theme and layout...")
-        state = theme_analyzer_node(state)
-        progress_bar.progress(60)
+        # Create and compile workflow
+        status_text.info("🎨 Running flyer workflow (theme, images, refinement)...")
+        workflow = create_workflow()
+        state = workflow.invoke(state)
+        progress_bar.progress(70)
 
-        # Render HTML to image
-        image_path = render_html_to_image(state.final_output)
-
-        # Generate summary
-        status_text.info("Generating flyer summary...")
-        state.flyer_summary = generate_summary(state.theme_json)
+        # Render final HTML → Image
+        status_text.info("🖼️ Rendering flyer preview...")
+        image_path = display_HTML2Img(state.final_output)
         progress_bar.progress(85)
 
-        # Save final state
+        # Generate flyer summary
+        status_text.info("📝 Generating flyer summary...")
+        state.flyer_summary = generate_summary(state.theme_json)
+        progress_bar.progress(95)
+
+        # Save to session
         st.session_state.final_state = state
         st.session_state.processing_complete = True
+        st.session_state._latest_image = image_path
+
         progress_bar.progress(100)
-        status_text.success("Flyer generated successfully!")
+        status_text.success("✅ Flyer generated successfully!")
 
     except Exception as e:
         err_msg = f"{type(e).__name__}: {str(e)}"
-        status_text.error(f"Generation failed: {err_msg}")
+        status_text.error(f"❌ Generation failed: {err_msg}")
         progress_bar.progress(100)
+        st.session_state.processing_complete = True
 
     finally:
         st.session_state._latest_image = image_path
@@ -143,7 +148,7 @@ def generation_process(user_prompt: str, api_provider: str):
 
 def render_flyer_tab(final_state, tab, image_path):
     with tab:
-        if not final_state or not getattr(final_state, "final_output", None):
+        if not final_state or not getattr(final_state, "refined_html", None):
             st.info("No flyer generated yet.")
             return
 
@@ -153,13 +158,13 @@ def render_flyer_tab(final_state, tab, image_path):
         )
 
         if image_path:
-            st.image(image_path, use_container_width=True, caption="🖼️ AI-Generated Flyer Preview")
+            st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
         else:
             st.warning("⚠️ Flyer image not available.")
 
-        # Raw HTML
+        # Raw HTML (refined with images)
         with st.expander("🔍 View Raw HTML"):
-            st.code(final_state.final_output, language="html")
+            st.code(final_state.refined_html, language="html")
 
 
 def render_summary_tab(final_state, tab):

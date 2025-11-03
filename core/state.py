@@ -18,6 +18,8 @@ class FlyerState:
     # Final outputs
     final_output: str = ""        # Final HTML flyer layout after refinement
     flyer_summary: str = ""       # Textual description of the generated flyer
+    iteration_count: int = 1
+    refined_html: str = ""
 
     # Logging and metadata
     messages: List[str] = field(default_factory=list)    # Log of progress messages

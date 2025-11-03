@@ -1,6 +1,3 @@
-"""Prompts file"""
-
-
 THEME_ANALYZER_PROMPT = """
 You are a world-class flyer designer AI. Analyze the user prompt below and produce a JSON describing a premium, catchy, elegant flyer.
 
@@ -84,74 +81,25 @@ Make the flyer design feel ultra-premium and visually striking, using:
 """
 
 
-IMAGE_PROMPT_GENERATOR = """
-You are a visual designer crafting text prompts for image-generation models.
+refinement_prompt = """
+You are an expert visual designer and HTML flyer reviewer.
 
-Based on the flyer theme and layout hints, generate prompts for:
-- Main background image
-- 2–3 decorative icons or stickers
+1️⃣ Critically evaluate this HTML flyer:
+   - Layout quality, color harmony, font usage, balance, readability.
+   - Give a short score from 0–10.
 
-Include:
-- Composition
-- Mood and tone
-- Style matching the flyer theme
-- Placement based on layout_shapes from theme JSON
+2️⃣ Then, if improvements are needed:
+   - Directly modify the HTML flyer to improve it.
+   - Keep the original structure and text intact.
 
-Return JSON:
-{
-  "background_prompt": "short vivid prompt (max 30 words)",
-  "stickers": ["list of sticker/icon ideas (1–3 items)"],
-  "color_palette_hint": "describe lighting and color mood briefly"
-}
+3️⃣ Return JSON:
+{{ "judgment": "<your review and score>", "edited_html": "<the improved HTML code>" }}
 
-FLYER CONTEXT:
-{flyer_context_json}
+Here is the flyer HTML:
+{final_output}
 """
 
 
-# HTML LAYOUT GENERATOR — combine texts, images, and layout
-HTML_LAYOUT_GENERATOR = """
-You are an expert web designer and HTML/CSS developer.
-
-Task:
-Generate a flyer layout in clean HTML with inline CSS.
-
-Requirements:
-- Use the provided flyer data, text JSON, image URLs, and layout shapes.
-- Keep layout responsive and visually balanced.
-- Do not include <html>, <head>, or <body> tags.
-- Use inline CSS only.
-- Reflect the tone and theme colors in styling.
-- Prefer <div>, <h1>, <p>, <img> elements.
-
-Output ONLY the HTML (no explanations or markdown).
-
-FLYER DATA:
-{flyer_data_json}
-"""
-
-
-# LAYOUT EVALUATOR — review HTML and suggest improvements
-LAYOUT_EVALUATOR_PROMPT = """
-You are a senior UI/UX designer reviewing a flyer’s HTML output.
-
-Task:
-- Identify layout, spacing, and readability issues.
-- Suggest or apply small improvements (font sizes, alignment, colors).
-- Do NOT change text meaning.
-
-Return JSON:
-{
-  "feedback": ["list of issues or suggestions"],
-  "revised_html": "string with improved layout if applicable"
-}
-
-HTML INPUT:
-{html_code}
-"""
-
-
-# DESCRIPTIVE SUMMARY — summarize flyer design for clients
 DESCRIPTIVE_SUMMARY_PROMPT = """
 You are a visual designer.
 
