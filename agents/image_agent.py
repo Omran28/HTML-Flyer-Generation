@@ -40,7 +40,6 @@ def extract_image_attributes(state: FlyerState):
         position = img.get("position", "Center")
         size = parse_size(img.get("size", "auto"))
 
-        # Infer visual layer
         pos_lower = position.lower()
         if "background" in pos_lower:
             layer = "background"
@@ -56,10 +55,7 @@ def extract_image_attributes(state: FlyerState):
             "layer": layer
         })
 
-    return {
-        "count": len(normalized_images),
-        "images": normalized_images
-    }
+    return {"count": len(normalized_images), "images": normalized_images}
 
 
 def image_generator_node(state: FlyerState) -> FlyerState:
@@ -68,7 +64,7 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         num_images = images_info["count"]
         images_metadata = images_info["images"]
 
-        generated_images: List[dict] = []
+        generated_images: List[str] = []
 
         for i, img_meta in enumerate(images_metadata):
             prompt = f"{img_meta['description']} design for flyer, premium, elegant, professional"
@@ -80,20 +76,17 @@ def image_generator_node(state: FlyerState) -> FlyerState:
                 guidance_scale=7.5,
             ).images[0]
 
-            # Save temp file
             file_path = f"temp_flyer_image_{i}.png"
             img.save(file_path)
+            generated_images.append(file_path)
 
-            generated_images.append({
-                **img_meta,
-                "path": file_path
-            })
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
             state.log(f"✅ Generated image saved at {file_path}")
 
-        # Inject images into HTML without altering original final_output
-        html = getattr(state, "final_output", "")
-        width_px, height_px = 800, 600
+        # Inject images into HTML
+        html = state.final_output or "<div></div>"
         POS_MAP = {
             "Top Left": (8, 8), "Top Center": (50, 8), "Top Right": (92, 8),
             "Center": (50, 50), "Bottom Left": (8, 92), "Bottom Center": (50, 92),
@@ -101,26 +94,28 @@ def image_generator_node(state: FlyerState) -> FlyerState:
             "Top": (50, 6), "Bottom": (50, 94)
         }
 
-        # Split HTML after opening <div> to insert <img> tags
         html_parts = html.split(">", 1)
         if len(html_parts) == 2:
             opening_div, rest_html = html_parts
             img_tags = ""
-            for img in generated_images:
-                xperc, yperc = POS_MAP.get(img["position"], (50, 50))
+            for img_path, img_meta in zip(generated_images, images_metadata):
+                xperc, yperc = POS_MAP.get(img_meta["position"], (50, 50))
                 img_tags += f"""
-                <img src="{img['path']}" style="position:absolute; top:{yperc}%; left:{xperc}%;
-                    width:{img['size']}; height:{img['size']}; transform:translate(-50%, -50%);
-                    z-index:{2 if img['layer']=='foreground' else 0}; pointer-events:none;"/>
+                <img src="{img_path}" style="position:absolute; top:{yperc}%; left:{xperc}%;
+                    width:{img_meta['size']}; height:{img_meta['size']}; transform:translate(-50%, -50%);
+                    z-index:{2 if img_meta['layer']=='foreground' else 0}; pointer-events:none;"/>
                 """
-            # Save updated HTML in refined_html
             state.refined_html = opening_div + ">" + img_tags + rest_html
         else:
             state.refined_html = html
             state.log("⚠️ Could not inject images into HTML, using original HTML")
 
-        # Save paths for later use
-        state["generated_images"] = [img["path"] for img in generated_images]
+        # Save generated images paths
+        state.generated_images = generated_images
+
+        # Optionally, update final_output for downstream steps
+        state.final_output = state.refined_html or state.final_output
+
         state.log(f"🚀 Image generation and injection completed ({num_images} images).")
 
     except Exception as e:

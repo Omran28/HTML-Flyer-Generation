@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
-
 @dataclass
 class FlyerState:
     # Input information
@@ -17,14 +16,14 @@ class FlyerState:
 
     # Final outputs
     final_output: str = ""        # Final HTML flyer layout after refinement
+    refined_html: str = ""        # HTML after images and refinement
     flyer_summary: str = ""       # Textual description of the generated flyer
+    generated_images: List[str] = field(default_factory=list)  # Paths to generated images
     iteration_count: int = 1
-    refined_html: str = ""
 
     # Logging and metadata
     messages: List[str] = field(default_factory=list)    # Log of progress messages
     progress_log: str = ""                               # Combined progress string
-    iteration_count: int = 0                             # Number of refinement iterations
     error: Optional[str] = None                          # Error message if any failure occurs
     needs_refinement: bool = False                       # Whether evaluation requests another refinement pass
 
