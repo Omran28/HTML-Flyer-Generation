@@ -113,15 +113,18 @@ def generation_process(user_prompt: str, api_provider: str):
         progress_bar.progress(20)
 
         # Create and compile workflow
-        status_text.info("🎨 Running flyer workflow (theme, images, refinement)...")
+        status_text.info("🎨 Running Flyer Workflow..")
         workflow = create_workflow()
+        st.write("workflow")
         state = workflow.invoke(state)
+        st.write("invoke")
         progress_bar.progress(70)
+        st.write(f"state: {state.final_output}")
 
-        # Render final HTML → Image
         status_text.info("🖼️ Rendering flyer preview...")
         image_path = display_HTML2Img(state.final_output)
         progress_bar.progress(85)
+        st.write("????")
 
         # Generate flyer summary
         status_text.info("📝 Generating flyer summary...")

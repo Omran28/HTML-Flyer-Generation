@@ -113,8 +113,6 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         # Save generated images paths
         state.generated_images = generated_images
 
-        # Optionally, update final_output for downstream steps
-        state.final_output = state.refined_html or state.final_output
 
         state.log(f"🚀 Image generation and injection completed ({num_images} images).")
 
