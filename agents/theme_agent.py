@@ -1,27 +1,34 @@
 import json, re
-import imgkit
 from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
+import os
+import streamlit as st
+from html2image import Html2Image
+
+
+# def render_html_to_image(html_content: str, output_path: str = "flyer_preview.png") -> str:
+#     options = {
+#         "format": "png",
+#         "quality": "100",
+#         "encoding": "UTF-8",
+#         "enable-local-file-access": None,
+#         "width": 800,
+#         "height": 600,
+#         "disable-smart-width": ""
+#     }
+#     imgkit.from_string(html_content, output_path, options=options)
+#     return output_path
 
 
 def generate_flyer_html(parsed: dict) -> str:
-    """
-    Generate a premium flyer HTML from a parsed design dictionary.
-
-    Args:
-        parsed (dict): Parsed LLM output with keys: theme, texts, layout, images.
-
-    Returns:
-        str: HTML string representing the flyer.
-    """
 
     # Safely extract all parts
     theme = parsed.get("theme", {})
     texts = parsed.get("texts", []) or []
     layout = parsed.get("layout", {}) or {}
     shapes = layout.get("layout_shapes", []) or []
-    images = parsed.get("images", []) or []
+    # images = parsed.get("images", []) or []
 
     width_px, height_px = 800, 600  # Canvas dimensions
 
@@ -29,13 +36,8 @@ def generate_flyer_html(parsed: dict) -> str:
     bg_color = layout.get("background", {}).get("color", theme.get("theme_colors", ["#FFFFFF"])[0])
 
     # Start HTML container
-    html_parts = [
-        f"""<div style="width:{width_px}px; height:{height_px}px; border-radius:20px; overflow:hidden;
-                        position:relative; background:{bg_color}; font-family:sans-serif;">"""
-    ]
-
-    # Inline SVG gradient defs
-    html_parts.append("""
+    html_parts = [f"""<div style="width:{width_px}px; height:{height_px}px; border-radius:20px; overflow:hidden;
+                        position:relative; background:{bg_color}; font-family:sans-serif;">""", """
     <svg width="0" height="0" style="position:absolute">
       <defs>
         <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
@@ -48,7 +50,9 @@ def generate_flyer_html(parsed: dict) -> str:
         </linearGradient>
       </defs>
     </svg>
-    """)
+    """]
+
+    # Inline SVG gradient defs
 
     # Position mappings for CSS
     POS_MAP = {
@@ -218,58 +222,75 @@ def generate_flyer_html(parsed: dict) -> str:
 
 
 
-def render_html_to_image(html_content: str, output_path: str = "flyer_preview.png") -> str:
-    options = {
-        "format": "png",
-        "quality": "100",
-        "encoding": "UTF-8",
-        "enable-local-file-access": None,
-        "width": 800,
-        "height": 600,
-        "disable-smart-width": ""
-    }
-    imgkit.from_string(html_content, output_path, options=options)
-    return output_path
+def display_HTML2Img(html_content: str, output_path="flyer_html2Img.png") -> str:
+    try:
+        # Ensure output folder exists
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+        # Save HTML content to a temporary file
+        temp_html_path = "temp_flyer.html"
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        # Render HTML → Image
+        hti = Html2Image(browser='chrome', output_path=os.path.dirname(output_path) or ".")
+        hti.screenshot(html_file=temp_html_path, save_as=os.path.basename(output_path))
+
+        image_path = os.path.join(os.path.dirname(output_path), os.path.basename(output_path))
+
+        return image_path
+
+    except Exception as e:
+        st.error(f"⚠️ Failed to render HTML as image: {e}")
+        return None
 
 
 def theme_analyzer_node(state: FlyerState) -> FlyerState:
     user_prompt = state.user_prompt.strip()
     if not user_prompt:
-        state.log("❌ Empty prompt")
+        state.log("❌ Empty prompt provided. Skipping theme analysis.")
+        state.final_output = "<p style='color:red;'>Empty prompt.</p>"
         return state
 
     llm = initialize_llm()
-    state.log("Invoking Gemini model for theme analysis...")
+    state.log(f"⚙️ Initialized Gemini model for theme analysis: {getattr(llm, 'model', 'Unknown')}")
+
+    # Prepare prompt
+    llm_prompt = THEME_ANALYZER_PROMPT.replace("{user_prompt}", user_prompt)
+    state.log("🧠 Sending prompt to Gemini model...")
 
     try:
-        # Prepare the LLM prompt
-        llm_prompt = THEME_ANALYZER_PROMPT.replace("{user_prompt}", user_prompt)
+        response = llm.invoke(llm_prompt)
 
-        # Gemini generate returns a string directly
-        raw_output = llm.generate([llm_prompt])  # pass a list
-        if isinstance(raw_output, list):
-            # some versions return list of strings
-            raw_output = raw_output[0]
+        # Handle object and string outputs
+        raw_output = getattr(response, "content", str(response))
         raw_output = raw_output.strip()
 
-        # Remove code block markers
+        # Remove Markdown code fences and parse JSON
         cleaned = re.sub(r"^```(?:json)?|```$", "", raw_output, flags=re.MULTILINE)
         parsed = json.loads(cleaned)
 
-        # Validate required keys
+        # Ensure all expected keys exist
         REQUIRED_KEYS = ["theme", "texts", "layout", "images"]
-        missing_keys = [k for k in REQUIRED_KEYS if k not in parsed]
-        if missing_keys:
-            raise ValueError(f"Missing keys in LLM output: {missing_keys}")
+        missing = [k for k in REQUIRED_KEYS if k not in parsed]
+        if missing:
+            raise ValueError(f"Missing keys in LLM output: {missing}")
 
-        # Assign to state
+        # Save parsed JSON and HTML
         state.theme_json = parsed
         state.final_output = generate_flyer_html(parsed)
-        state.log("✅ Flyer HTML generated successfully.")
+
+        state.log("✅ Theme analysis completed successfully.")
+        state.log("✅ Flyer HTML generated and stored in state.final_output.")
+
+    except json.JSONDecodeError:
+        err_msg = "❌ Failed to decode JSON from Gemini output."
+        state.log(err_msg)
+        state.final_output = f"<p style='color:red;'>{err_msg}</p>"
+        state.theme_json = {"error": "Invalid JSON structure"}
 
     except Exception as e:
-        err_msg = f"❌ Unexpected error: {e}"
-        print(err_msg)
+        err_msg = f"❌ Unexpected error during theme generation: {e}"
         state.log(err_msg)
         state.final_output = f"<p style='color:red;'>{err_msg}</p>"
         state.theme_json = {"error": str(e)}
