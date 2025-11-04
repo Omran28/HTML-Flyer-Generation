@@ -7,20 +7,6 @@ import streamlit as st
 from html2image import Html2Image
 
 
-# def render_html_to_image(html_content: str, output_path: str = "flyer_preview.png") -> str:
-#     options = {
-#         "format": "png",
-#         "quality": "100",
-#         "encoding": "UTF-8",
-#         "enable-local-file-access": None,
-#         "width": 800,
-#         "height": 600,
-#         "disable-smart-width": ""
-#     }
-#     imgkit.from_string(html_content, output_path, options=options)
-#     return output_path
-
-
 def generate_flyer_html(parsed: dict) -> str:
 
     # Safely extract all parts
@@ -224,24 +210,23 @@ def generate_flyer_html(parsed: dict) -> str:
 
 def display_HTML2Img(html_content: str, output_path="flyer_html2Img.png") -> str:
     try:
-        # Ensure output folder exists
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        # Save HTML content to a temporary file
         temp_html_path = "temp_flyer.html"
         with open(temp_html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-        # Render HTML → Image
-        hti = Html2Image(browser='chrome', output_path=os.path.dirname(output_path) or ".")
+        # Specify Colab Chromium path
+        hti = Html2Image(browser_executable="/usr/bin/chromium-browser",
+                          output_path=os.path.dirname(output_path) or ".")
         hti.screenshot(html_file=temp_html_path, save_as=os.path.basename(output_path))
 
         image_path = os.path.join(os.path.dirname(output_path), os.path.basename(output_path))
-
         return image_path
 
     except Exception as e:
-        st.error(f"⚠️ Failed to render HTML as image: {e}")
+        st.warning(f"⚠️ Failed to render HTML as image: {e}. Showing HTML preview instead.")
+        # Fallback: just return None
         return None
 
 

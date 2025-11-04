@@ -59,7 +59,7 @@ def create_interface(model, api):
 
 def render_sidebar(model):
     with st.sidebar:
-        st.markdown("<div class='sidebar-header'>⚙️ Settings & Quick Guide</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sidebar-header'>⚙️ Settings</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='card'><b>LLM Model:</b> {model}</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='sidebar-header'>🔖 Quick Guide</div>", unsafe_allow_html=True)
@@ -171,9 +171,10 @@ def render_flyer_tab(final_state, tab, image_path):
         if image_path:
             st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
         else:
-            st.warning("⚠️ Flyer image not available.")
+            st.warning("⚠️ Flyer image not available, displaying HTML instead.")
+            st.components.v1.html(final_state.refined_html, height=600)
 
-        # Raw HTML (refined with images)
+        # Raw HTML
         with st.expander("🔍 View Raw HTML"):
             st.code(final_state.refined_html, language="html")
 
