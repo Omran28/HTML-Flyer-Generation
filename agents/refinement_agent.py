@@ -31,6 +31,6 @@ def refinement_node(state: FlyerState) -> FlyerState:
     state.log(f" Iteration {state.iteration_count} completed. Judgment: {state.evaluation_json.get('judgment', '')}")
     
     # Display results
-    display(HTML("<h3>Enhanced Flyer (After LLM Edit)</h3>" + state.html_code))
+    display(HTML("<h3>Enhanced Flyer (After LLM Edit)</h3>" + state.refined_html))
 
     return state
