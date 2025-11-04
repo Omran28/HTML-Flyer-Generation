@@ -5,6 +5,7 @@ from utils.prompt_utils import THEME_ANALYZER_PROMPT
 import os
 import streamlit as st
 from html2image import Html2Image
+from pyppeteer import launch
 
 
 def generate_flyer_html(parsed: dict) -> str:
@@ -209,25 +210,32 @@ def generate_flyer_html(parsed: dict) -> str:
 
 
 def display_HTML2Img(html_content: str, output_path="flyer_html2Img.png") -> str:
-    try:
+    async def _render():
+        # Launch headless browser
+        browser = await launch(args=['--no-sandbox'])
+        page = await browser.newPage()
+
+        # Set viewport large enough for flyers
+        await page.setViewport({"width": 1200, "height": 1600})
+        await page.setContent(html_content)
+
+        # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        temp_html_path = "temp_flyer.html"
-        with open(temp_html_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
+        # Screenshot
+        await page.screenshot({'path': output_path, 'fullPage': True})
+        await browser.close()
+        return output_path
 
-        # Specify Colab Chromium path
-        hti = Html2Image(browser_executable="/usr/bin/chromium-browser",
-                          output_path=os.path.dirname(output_path) or ".")
-        hti.screenshot(html_file=temp_html_path, save_as=os.path.basename(output_path))
-
-        image_path = os.path.join(os.path.dirname(output_path), os.path.basename(output_path))
+    try:
+        # Run the async rendering function
+        image_path = asyncio.run(_render())
         return image_path
 
     except Exception as e:
-        st.warning(f"⚠️ Failed to render HTML as image: {e}. Showing HTML preview instead.")
-        # Fallback: just return None
+        st.error(f"⚠️ Failed to render HTML as image: {e}\nShowing HTML preview instead.")
         return None
+
 
 
 def theme_analyzer_node(state: FlyerState) -> FlyerState:
