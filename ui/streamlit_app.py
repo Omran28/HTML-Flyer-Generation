@@ -1,11 +1,11 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import streamlit as st
-from core.state import FlyerState
 from utils.summary_utils import generate_summary
-from agents.theme_agent import display_HTML2Img
-from core.workflow import create_workflow
-import streamlit.components.v1 as components
+from agents.theme_agent import *
+from agents.refinement_agent import *
+from agents.image_agent import *
+
+sys.path.append("/content/drive/MyDrive/Beyond HTML Flyer Generation Project/HTML-Flyer-Generation")
 
 
 
@@ -114,21 +114,22 @@ def generation_process(user_prompt: str, api_provider: str):
         state = FlyerState(user_prompt=user_prompt.strip(), api_provider=api_provider)
         progress_bar.progress(20)
 
-        # Create and compile workflow
-        status_text.info("🎨 Running Flyer Workflow...")
-        workflow = create_workflow()
+        # Run nodes manually (theme -> image -> refine)
+        status_text.info("🎨 Analyzing theme...")
+        state = theme_analyzer_node(state)
+        progress_bar.progress(35)
 
-        result = workflow.invoke(state)
-        if isinstance(result, dict):
-            state = FlyerState(**result)
-        else:
-            state = result
+        status_text.info("🖼️ Generating images...")
+        state = image_generator_node(state)
+        progress_bar.progress(60)
 
+        status_text.info("🛠️ Refining HTML...")
+        state = refinement_node(state)
         progress_bar.progress(70)
 
-        # Render final HTML → Image (Colab-compatible)
+        # Render final HTML → display in Colab
         status_text.info("🖼️ Rendering flyer preview...")
-        image_path = display_HTML2Img(getattr(state, "refined_html", state.final_output))
+        image_path = display_HTML2Img(state.refined_html)
         progress_bar.progress(85)
 
         # Generate flyer summary
@@ -166,14 +167,13 @@ def render_flyer_tab(final_state, tab, image_path):
             unsafe_allow_html=True
         )
 
-        # Use the generated image if available
+        # Display the image if it was generated
         if image_path and os.path.exists(image_path):
             st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
         else:
-            st.warning("⚠️ Flyer image not available, displaying HTML instead.")
-            st.markdown(final_state.refined_html, unsafe_allow_html=True)
+            st.warning("⚠️ Flyer image not available, showing HTML preview instead.")
 
-        # Raw HTML (refined with images)
+        # Raw HTML
         with st.expander("🔍 View Raw HTML"):
             st.code(final_state.refined_html, language="html")
 

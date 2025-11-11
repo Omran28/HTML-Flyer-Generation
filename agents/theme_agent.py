@@ -2,14 +2,12 @@ import json, re
 from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
+from IPython.display import display
 import os
-import streamlit as st
-from html2image import Html2Image
-from pyppeteer import launch
+from IPython.core.display import display, HTML
 
 
 def generate_flyer_html(parsed: dict) -> str:
-
     # Safely extract all parts
     theme = parsed.get("theme", {})
     texts = parsed.get("texts", []) or []
@@ -209,32 +207,43 @@ def generate_flyer_html(parsed: dict) -> str:
 
 
 
-def display_HTML2Img(html_content: str, output_path="flyer_html2Img.png") -> str:
-    async def _render():
-        # Launch headless browser
-        browser = await launch(args=['--no-sandbox'])
-        page = await browser.newPage()
-
-        # Set viewport large enough for flyers
-        await page.setViewport({"width": 1200, "height": 1600})
-        await page.setContent(html_content)
-
-        # Ensure output directory exists
+def display_HTML2Img(html_content: str, output_path="flyer_preview.png"):
+    try:
+        display(HTML(html_content))
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-
-        # Screenshot
-        await page.screenshot({'path': output_path, 'fullPage': True})
-        await browser.close()
         return output_path
 
-    try:
-        # Run the async rendering function
-        image_path = asyncio.run(_render())
-        return image_path
-
     except Exception as e:
-        st.error(f"⚠️ Failed to render HTML as image: {e}\nShowing HTML preview instead.")
+        print(f"⚠️ Failed to display HTML: {e}")
         return None
+
+
+# def display_HTML2Img(html_content: str, output_path="flyer_html2Img.png") -> str:
+#     async def _render():
+#         # Launch headless browser
+#         browser = await launch(args=['--no-sandbox'])
+#         page = await browser.newPage()
+#
+#         # Set viewport large enough for flyers
+#         await page.setViewport({"width": 1200, "height": 1600})
+#         await page.setContent(html_content)
+#
+#         # Ensure output directory exists
+#         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+#
+#         # Screenshot
+#         await page.screenshot({'path': output_path, 'fullPage': True})
+#         await browser.close()
+#         return output_path
+#
+#     try:
+#         # Run the async rendering function
+#         image_path = asyncio.run(_render())
+#         return image_path
+#
+#     except Exception as e:
+#         st.error(f"⚠️ Failed to render HTML as image: {e}\nShowing HTML preview instead.")
+#         return None
 
 
 
