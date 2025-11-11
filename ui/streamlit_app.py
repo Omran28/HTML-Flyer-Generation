@@ -178,6 +178,7 @@ def render_flyer_tab(final_state, tab, image_path):
             st.code(final_state.refined_html, language="html")
 
 
+
 def render_summary_tab(final_state, tab):
     with tab:
         if not final_state or not getattr(final_state, "flyer_summary", None):

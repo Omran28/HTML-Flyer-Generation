@@ -1,9 +1,9 @@
 from langgraph.graph import StateGraph, END
-from core.state import FlyerState
-from agents.theme_agent import theme_analyzer_node
+
 from agents.image_agent import image_generator_node
 from agents.refinement_agent import refinement_node
-from IPython.display import Image
+from agents.theme_agent import theme_analyzer_node
+from core.state import FlyerState
 
 
 # Workflow builder
