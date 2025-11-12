@@ -22,7 +22,7 @@ def refinement_node(state: FlyerState) -> FlyerState:
         if json_match:
             result = json.loads(json_match.group(0))
             state.evaluation_json = result
-            state.refined_html = result.get("edited_html", state.refined_html)
+            state.html_refined = result.get("edited_html", state.html_refined)
         else:
             state.evaluation_json = {"judgment": " Could not parse LLM output."}
     except Exception as e:
@@ -31,17 +31,17 @@ def refinement_node(state: FlyerState) -> FlyerState:
     state.iteration_count += 1
     state.log(f" Iteration {state.iteration_count} completed. Judgment: {state.evaluation_json.get('judgment', '')}")
     
-    # Display results
-    save_refined_html(state)
-    display(HTML("<h3>Enhanced Flyer (After LLM Edit)</h3>" + state.refined_html))
 
+    # Save automatically
+    output_path = save_refined_html(state)
+    state.log(f"💾 Refined HTML saved to: {output_path}")
     return state
 
 
 
 def save_refined_html(state):
-    if not hasattr(state, "refined_html") or not state.refined_html:
-        raise ValueError("No refined HTML found in state.refined_html")
+    if not hasattr(state, "html_refined") or not state.html_refined:
+        raise ValueError("No refined HTML found in state.html_refined")
 
     # Default file path
     output_path = "flyer_refined.html"
@@ -51,6 +51,6 @@ def save_refined_html(state):
 
     # Write the HTML
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write(state.refined_html)
+        f.write(state.html_refined)
 
     return os.path.abspath(output_path)

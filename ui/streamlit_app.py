@@ -158,7 +158,7 @@ def generation_process(user_prompt: str, api_provider: str):
 
 def render_flyer_tab(final_state, tab):
     with tab:
-        if not final_state or not getattr(final_state, "refined_html", None):
+        if not final_state or not getattr(final_state, "html_refined", None):
             st.info("No flyer generated yet.")
             return
 
@@ -171,11 +171,11 @@ def render_flyer_tab(final_state, tab):
 
         # Refined HTML preview
         st.markdown("### ♻️ Refined Flyer Preview")
-        st.components.v1.html(final_state.refined_html, height=800, scrolling=True)
+        st.components.v1.html(final_state.html_refined, height=800, scrolling=True)
 
         # Raw HTML
         with st.expander("🔍 View Raw HTML"):
-            st.code(final_state.refined_html, language="html")
+            st.code(final_state.html_refined, language="html")
 
 
 def render_summary_tab(final_state, tab):

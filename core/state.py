@@ -4,26 +4,23 @@ from typing import List, Dict, Any, Optional
 @dataclass
 class FlyerState:
     # Input information
-    user_prompt: str = ""          # The user's natural language request for the flyer
-    api_provider: str = "gemini"   # The model or API backend used for generation
+    user_prompt: str = ""
+    api_provider: str = "gemini"
 
-    # Intermediate stage outputs
-    theme_json: Dict[str, Any] = field(default_factory=dict)        # Theme extraction output (colors, fonts, composition)
-    html_output: str = ""                                           # HTML layout composed of all assets
-    evaluation_json: Dict[str, Any] = field(default_factory=dict)   # Evaluation results for refinement or scoring
-
-    # Final outputs
-    html_final: str = ""        # Final HTML flyer layout after refinement
-    refined_html: str = ""        # HTML after images and refinement
-    flyer_summary: str = ""       # Textual description of the generated flyer
-    generated_images: List[str] = field(default_factory=list)  # Paths to generated images
+    theme_json: Dict[str, Any] = field(default_factory=dict)
+    html_output: str = ""
+    html_final: str = ""
+    html_refined: str = ""
+    flyer_summary: str = ""
+    evaluation_json: Dict[str, Any] = field(default_factory=dict)
+    generated_images: List[str] = field(default_factory=list)
     iteration_count: int = 1
 
     # Logging and metadata
-    messages: List[str] = field(default_factory=list)    # Log of progress messages
-    progress_log: str = ""                               # Combined progress string
-    error: Optional[str] = None                          # Error message if any failure occurs
-    needs_refinement: bool = False                       # Whether evaluation requests another refinement pass
+    messages: List[str] = field(default_factory=list)
+    progress_log: str = ""
+    error: Optional[str] = None
+    needs_refinement: bool = False
 
     def log(self, message: str):
         # Append a status message to logs
