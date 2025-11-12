@@ -44,7 +44,7 @@ JSON Schema (fill values based on the user prompt; do not include example values
       {
         "shape": "circle | rectangle | banner | wave | floral | sticker | blob",
         "position": "Top | Center | Bottom | Left | Right | Top Left | Bottom Right",
-        "size": "string (e.g., '60%', '200px')",
+        "size": "string (e.g., '60%')",
         "color": "#hex",
         "opacity": 0.5-1.0,
         "layer": "background | foreground"
@@ -55,7 +55,7 @@ JSON Schema (fill values based on the user prompt; do not include example values
 
   "images": [
     {
-      "description": "Background image matching flyer theme (brief and renderable)",
+      "description": "Background image matching flyer theme (detailed and renderable)",
       "position": "Background",
       "size": "100%"
     },

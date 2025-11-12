@@ -1,7 +1,8 @@
 from core.state import FlyerState
 from typing import List
-import torch
+import torch, base64, os, mimetypes
 from diffusers import DiffusionPipeline
+
 
 # Load Stable Diffusion globally
 pipe = DiffusionPipeline.from_pretrained(
@@ -22,6 +23,16 @@ def parse_size(size_str: str) -> str:
         return f"{float(size_str)}px"
     except ValueError:
         return "auto"
+
+
+def image_to_data_uri(path: str) -> str:
+    """Convert image file to base64 data URI for inline HTML embedding."""
+    if not path or not os.path.exists(path):
+        return ""
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{mime};base64,{data}"
 
 
 def extract_image_attributes(state: FlyerState):
@@ -64,7 +75,7 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         num_images = images_info["count"]
         images_metadata = images_info["images"]
 
-        generated_images: List[str] = []
+        generated_images: List[dict] = []
 
         for i, img_meta in enumerate(images_metadata):
             prompt = f"{img_meta['description']} design for flyer, premium, elegant, professional"
@@ -78,14 +89,17 @@ def image_generator_node(state: FlyerState) -> FlyerState:
 
             file_path = f"temp_flyer_image_{i}.png"
             img.save(file_path)
-            generated_images.append(file_path)
+
+            # Convert image to base64 URI for embedding
+            data_uri = image_to_data_uri(file_path)
+            generated_images.append({**img_meta, "path": file_path, "data_uri": data_uri})
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            state.log(f"✅ Generated image saved at {file_path}")
+            state.log(f"✅ Generated and embedded image {i+1} successfully.")
 
-        # Inject images into HTML
+        # --- Inject images into HTML ---
         html = state.final_output or "<div></div>"
         POS_MAP = {
             "Top Left": (8, 8), "Top Center": (50, 8), "Top Right": (92, 8),
@@ -98,23 +112,26 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         if len(html_parts) == 2:
             opening_div, rest_html = html_parts
             img_tags = ""
-            for img_path, img_meta in zip(generated_images, images_metadata):
+            for img_meta in generated_images:
                 xperc, yperc = POS_MAP.get(img_meta["position"], (50, 50))
+                z_index = 2 if img_meta["layer"] == "foreground" else 0
+
                 img_tags += f"""
-                <img src="{img_path}" style="position:absolute; top:{yperc}%; left:{xperc}%;
-                    width:{img_meta['size']}; height:{img_meta['size']}; transform:translate(-50%, -50%);
-                    z-index:{2 if img_meta['layer']=='foreground' else 0}; pointer-events:none;"/>
+                <img src="{img_meta['data_uri']}" 
+                     style="position:absolute; top:{yperc}%; left:{xperc}%;
+                            width:{img_meta['size']}; height:{img_meta['size']};
+                            transform:translate(-50%, -50%);
+                            z-index:{z_index}; pointer-events:none; border-radius:10px;"/>
                 """
+
             state.refined_html = opening_div + ">" + img_tags + rest_html
         else:
             state.refined_html = html
-            state.log("⚠️ Could not inject images into HTML, using original HTML")
+            state.log("⚠️ Could not inject images into HTML — using original HTML.")
 
-        # Save generated images paths
-        state.generated_images = generated_images
-
-
-        state.log(f"🚀 Image generation and injection completed ({num_images} images).")
+        # Save results in state
+        state.generated_images = [img["path"] for img in generated_images]
+        state.log(f"🚀 Image generation & embedding completed ({num_images} images).")
 
     except Exception as e:
         state.log(f"❌ [image_generator_node] Error: {str(e)}")

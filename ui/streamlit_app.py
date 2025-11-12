@@ -170,7 +170,9 @@ def render_flyer_tab(final_state, tab, image_path):
 
         # Display the image if it was generated
         if image_path and os.path.exists(image_path):
+            image_path = display_HTML2Img(final_state.refined_html)
             st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
+
         else:
             st.warning("⚠️ Flyer image not available, showing HTML preview instead.")
 
