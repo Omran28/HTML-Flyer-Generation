@@ -143,7 +143,7 @@ def image_generator_node(state: FlyerState) -> FlyerState:
     return state
 
 
-def save_html_final(state: FlyerState, filename="flyer_with_images.html") -> str:
+def save_html_final(state: FlyerState, filename="flyer_final.html") -> str:
     if not hasattr(state, "html_final") or not state.html_final:
         raise ValueError("No HTML found in state.html_final to save.")
 
