@@ -133,7 +133,23 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         state.generated_images = [img["path"] for img in generated_images]
         state.log(f"🚀 Image generation & embedding completed ({num_images} images).")
 
+        # Save HTML with embedded images
+        output_path = save_html_final(state)
+        state.log(f"💾 HTML with generated images saved to: {output_path}")
+
     except Exception as e:
         state.log(f"❌ [image_generator_node] Error: {str(e)}")
 
     return state
+
+
+def save_html_final(state: FlyerState, filename="flyer_with_images.html") -> str:
+    if not hasattr(state, "html_final") or not state.html_final:
+        raise ValueError("No HTML found in state.html_final to save.")
+
+    os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(state.html_final)
+
+    return os.path.abspath(filename)
+
