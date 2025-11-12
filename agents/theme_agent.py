@@ -180,8 +180,9 @@ def generate_flyer_html(parsed: dict) -> str:
 
 
 def display_HTML2Img(html_content: str, output_path="flyer_preview.png"):
-    hti = Html2Image()
-    hti.screenshot(html_str=html_content, save_as=output_path)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    hti = Html2Image(output_path=os.path.dirname(output_path) or ".", size=(1024, 768))
+    hti.screenshot(html_str=html_content, save_as=os.path.basename(output_path))
     return output_path
 
 def theme_analyzer_node(state: FlyerState) -> FlyerState:

@@ -157,7 +157,7 @@ def generation_process(user_prompt: str, api_provider: str):
 
 
 
-def render_flyer_tab(final_state, tab, image_path):
+def render_flyer_tab(final_state, tab):
     with tab:
         if not final_state or not getattr(final_state, "refined_html", None):
             st.info("No flyer generated yet.")
@@ -168,18 +168,17 @@ def render_flyer_tab(final_state, tab, image_path):
             unsafe_allow_html=True
         )
 
-        # Display the image if it was generated
-        if image_path and os.path.exists(image_path):
-            image_path = display_HTML2Img(final_state.refined_html)
-            st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
+        # ✅ Always generate or refresh the PNG before displaying
+        image_path = display_HTML2Img(final_state.refined_html, "flyer_preview.png")
 
+        if os.path.exists(image_path):
+            st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
         else:
             st.warning("⚠️ Flyer image not available, showing HTML preview instead.")
+            st.components.v1.html(final_state.refined_html, height=800, scrolling=True)
 
-        # Raw HTML
         with st.expander("🔍 View Raw HTML"):
             st.code(final_state.refined_html, language="html")
-
 
 
 def render_summary_tab(final_state, tab):
