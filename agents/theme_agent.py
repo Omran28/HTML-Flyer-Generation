@@ -1,4 +1,4 @@
-import json, re
+import json, re, os
 from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT

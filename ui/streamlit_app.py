@@ -167,7 +167,6 @@ def render_flyer_tab(final_state, tab):
             unsafe_allow_html=True
         )
 
-        # ✅ Always generate or refresh the PNG before displaying
         image_path = display_HTML2Img(final_state.refined_html, "flyer_preview.png")
 
         if os.path.exists(image_path):
@@ -217,14 +216,13 @@ def render_results():
     st.header("📊 Results Overview")
 
     final_state = st.session_state.get("final_state", None)
-    image_path = st.session_state.get("_latest_image", None)
 
     if not final_state:
         st.info("✏️ Write your flyer instructions above and click **Generate** to see the results.")
         return
 
     tabs = st.tabs(["🏞️ Generated Flyer", "📈 Flyer Summary"])
-    render_flyer_tab(final_state, tabs[0], image_path)
+    render_flyer_tab(final_state, tabs[0])
     render_summary_tab(final_state, tabs[1])
 
 
