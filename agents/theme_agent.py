@@ -1,17 +1,52 @@
-import json, re, os
+"""
+agents/theme.py
+----------------
+Theme Analyzer Agent
+
+• Generates flyer layout & theme using LLM.
+• Builds a visually striking HTML layout with shapes, text, and background.
+• Supports premium layering, gradients, shadows, and curved/sticker text.
+"""
+
+import os, re, json
+from html2image import Html2Image
 from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
-from html2image import Html2Image
 
 
+# ==========================================================
+# Utility
+# ==========================================================
+def safe_float(value, default=0.0):
+    """Convert strings like '85%' or '100px' safely to float, fallback to default."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = (
+            value.replace('%', '')
+                 .replace('width', '')
+                 .replace('height', '')
+                 .replace(',', '')
+                 .split()[0]
+                 .strip()
+        )
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
 
+
+# ==========================================================
+# HTML Generator
+# ==========================================================
 def generate_flyer_html(parsed: dict) -> str:
-    """Generate flyer HTML from the parsed theme structure."""
+    """Generate premium flyer HTML from parsed theme data."""
     theme = parsed.get("theme", {})
-    texts = parsed.get("texts", []) or []
-    layout = parsed.get("layout", {}) or {}
-    shapes = layout.get("layout_shapes", []) or []
+    texts = parsed.get("texts", [])
+    layout = parsed.get("layout", {})
+    shapes = layout.get("layout_shapes", [])
 
     width_px, height_px = 800, 600
     bg_color = layout.get("background", {}).get("color", theme.get("theme_colors", ["#FFFFFF"])[0])
@@ -19,6 +54,7 @@ def generate_flyer_html(parsed: dict) -> str:
     html_parts = [
         f"""<div style="width:{width_px}px; height:{height_px}px; border-radius:20px; overflow:hidden;
                         position:relative; background:{bg_color}; font-family:sans-serif;">""",
+        # Global gradients
         """
         <svg width="0" height="0" style="position:absolute">
           <defs>
@@ -32,7 +68,7 @@ def generate_flyer_html(parsed: dict) -> str:
             </linearGradient>
           </defs>
         </svg>
-        """,
+        """
     ]
 
     POS_MAP = {
@@ -42,43 +78,41 @@ def generate_flyer_html(parsed: dict) -> str:
         "Top": (50, 6), "Bottom": (50, 94)
     }
 
-    # --- Shapes ---
+    # -----------------------
+    # Shapes
+    # -----------------------
     for shape in shapes:
         s_type = shape.get("shape", "rectangle")
         s_pos = shape.get("position", "Center")
         s_size = shape.get("size", "40%")
         s_color = shape.get("color", "#FFFFFF")
-        s_opacity = float(shape.get("opacity", 0.9))
+        s_opacity = safe_float(shape.get("opacity", 0.9), 0.9)
         s_layer = shape.get("layer", "background")
         xperc, yperc = POS_MAP.get(s_pos, (50, 50))
-
-        w = h = s_size if "px" in str(s_size) else f"{float(str(s_size).strip('%'))}%"
         z_index = 0 if s_layer == "background" else 1
 
+        w = h = s_size if "px" in str(s_size) else f"{safe_float(s_size, 40)}%"
+
         if s_type == "wave":
-            position_style = "bottom:0;" if "bottom" in s_pos.lower() else "top:0;"
+            pos_style = "bottom:0;" if "bottom" in s_pos.lower() else "top:0;"
             html_parts.append(f"""
             <svg viewBox="0 0 800 240" preserveAspectRatio="none"
-                 style="position:absolute; left:10%; width:80%; height:40%; {position_style} 
+                 style="position:absolute; left:10%; width:80%; height:40%; {pos_style}
                         z-index:{z_index}; opacity:{s_opacity};">
               <path d="M0,120 C200,40 400,200 800,120 L800,240 L0,240 Z" fill="{s_color}"/>
             </svg>""")
             continue
 
-        border_radius = {
-            "circle": "50%",
-            "floral": "50%",
-            "sticker": "20px"
-        }.get(s_type, "15px")
-
+        border_radius = {"circle": "50%", "floral": "50%", "sticker": "20px"}.get(s_type, "15px")
         html_parts.append(f"""
         <div style="position:absolute; top:{yperc}%; left:{xperc}%;
                     width:{w}; height:{h}; background:{s_color};
                     opacity:{s_opacity}; border-radius:{border_radius};
-                    box-shadow:0 12px 30px rgba(0,0,0,0.12); z-index:{z_index};"></div>
+                    box-shadow:0 12px 30px rgba(0,0,0,0.15);
+                    z-index:{z_index};"></div>
         """)
 
-    # Decorative overlay
+    # Decorative overlay for premium depth
     html_parts.append("""
     <div style="position:absolute; inset:0; pointer-events:none;
                 background: radial-gradient(60% 40% at 30% 20%, rgba(255,255,255,0.2), transparent 20%),
@@ -86,7 +120,9 @@ def generate_flyer_html(parsed: dict) -> str:
                 z-index:0;"></div>
     """)
 
-    # --- Texts ---
+    # -----------------------
+    # Texts
+    # -----------------------
     for idx, t in enumerate(texts):
         if isinstance(t, dict):
             content = t.get("content", "")
@@ -110,22 +146,22 @@ def generate_flyer_html(parsed: dict) -> str:
         font_style_css = "italic" if "italic" in style_list else "normal"
 
         shadows = []
-        if "shadow" in style_list: shadows.append("2px 4px 10px rgba(0,0,0,0.35)")
-        if "glow" in style_list: shadows.append("0 0 10px rgba(255,255,255,0.35)")
+        if "shadow" in style_list: shadows.append("2px 4px 12px rgba(0,0,0,0.35)")
+        if "glow" in style_list: shadows.append("0 0 12px rgba(255,255,255,0.35)")
         text_shadow_css = ", ".join(shadows) if shadows else "none"
 
-        if "gradient" in style_list or "gradient(" in str(color):
-            gradient_css = "background: linear-gradient(90deg, #388E3C, #A5D6A7); -webkit-background-clip: text; color: transparent;"
-        else:
-            gradient_css = f"color:{color};"
+        gradient_css = (
+            "background: linear-gradient(90deg, #388E3C, #A5D6A7); -webkit-background-clip: text; color: transparent;"
+            if "gradient" in style_list or "gradient(" in str(color)
+            else f"color:{color};"
+        )
 
         # Curved text
         if text_shape == "curved":
             try: fs = int(str(font_size).replace("px", ""))
             except: fs = 40
             radius = max(80, fs * 2 + 20)
-            cx = width_px * (xperc / 100)
-            cy = height_px * (yperc / 100)
+            cx, cy = width_px * (xperc / 100), height_px * (yperc / 100)
             path_id = f"curve_path_{idx}"
             html_parts.append(f"""
             <svg style="position:absolute; left:0; top:0; width:{width_px}px; height:{height_px}px; z-index:{z_index}; pointer-events:none;">
@@ -148,7 +184,7 @@ def generate_flyer_html(parsed: dict) -> str:
             <div style="position:absolute; left:{left}; top:{top}; width:{pill_w}px; height:{pill_h}px;
                         border-radius:{pill_h/2}px; display:flex; align-items:center; justify-content:center;
                         background:linear-gradient(90deg,#388E3C,#A5D6A7);
-                        box-shadow:0 10px 30px rgba(56,142,60,0.25); z-index:{z_index};">
+                        box-shadow:0 12px 35px rgba(56,142,60,0.25); z-index:{z_index};">
               <span style="font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight}; color:#F8F4EA;">
                 {content}
               </span>
@@ -156,17 +192,18 @@ def generate_flyer_html(parsed: dict) -> str:
             """)
             continue
 
+        # Standard straight text
         html_parts.append(f"""
         <div style="position:absolute; top:{yperc}%; left:{xperc}%;
                     transform:translate(-50%,-50%) rotate({angle});
-                    font-family:{font_style}; font-size:{font_size};
-                    font-weight:{font_weight}; font-style:{font_style_css};
-                    {gradient_css} text-shadow:{text_shadow_css}; z-index:{z_index};
-                    text-align:center; white-space:nowrap;">
+                    font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight};
+                    font-style:{font_style_css}; {gradient_css}; text-shadow:{text_shadow_css};
+                    z-index:{z_index}; text-align:center; white-space:nowrap;">
           {content}
         </div>
         """)
 
+    # Glossy overlay for premium depth
     html_parts.append("""
     <div style="position:absolute; inset:0; border-radius:20px;
                 box-shadow: inset 0 0 80px rgba(255,255,255,0.03),
@@ -178,23 +215,30 @@ def generate_flyer_html(parsed: dict) -> str:
     return "\n".join(html_parts)
 
 
-
+# ==========================================================
+# HTML → Image Renderer
+# ==========================================================
 def display_HTML2Img(html_content: str, output_path="flyer_preview.png"):
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     hti = Html2Image(output_path=os.path.dirname(output_path) or ".", size=(1024, 768))
     hti.screenshot(html_str=html_content, save_as=os.path.basename(output_path))
     return output_path
 
+
+# ==========================================================
+# Theme Analyzer Node
+# ==========================================================
 def theme_analyzer_node(state: FlyerState) -> FlyerState:
-    """Main node: analyze user theme and generate base HTML flyer."""
+    """Analyze theme, generate elegant flyer HTML, leave rendering/display to Streamlit."""
+
     user_prompt = state.user_prompt.strip()
     if not user_prompt:
-        state.log("❌ Empty prompt provided. Skipping theme analysis.")
+        state.log("❌ Empty prompt. Skipping theme analysis.")
         state.final_output = "<p style='color:red;'>Empty prompt.</p>"
         return state
 
     llm = initialize_llm()
-    state.log(f"⚙️ Initialized Gemini model for theme analysis: {getattr(llm, 'model', 'Unknown')}")
+    state.log(f"⚙️ Using Gemini model for theme analysis: {getattr(llm, 'model', 'Unknown')}")
     llm_prompt = THEME_ANALYZER_PROMPT.replace("{user_prompt}", user_prompt)
 
     try:

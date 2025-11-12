@@ -1,35 +1,41 @@
 THEME_ANALYZER_PROMPT = """
-You are a world-class flyer designer AI. Analyze the user prompt below and produce a JSON describing a premium, catchy, elegant flyer.
+You are a world-class flyer designer AI and creative art director. Analyze the user prompt below and produce a **single, valid JSON** describing a premium, visually striking flyer.
 
-User Prompt:
+---
+
+USER PROMPT:
 {user_prompt}
 
-Requirements for JSON output:
-- Output ONLY valid JSON with the exact top-level keys: "theme", "texts", "layout", "images".
-- All keys are mandatory.
-- Make the result rich, creative, and premium. Use elegant palettes, layered shapes, and expressive typography.
+---
 
-JSON Schema (fill values based on the user prompt; do not include example values here):
+### OBJECTIVE
+Design a flyer layout that is elegant, modern, and ultra-premium.  
+Include exactly **1 background image** and additional images only for the decorative shapes present.  
+The flyer should feel balanced, visually layered, and coherent with a clear text hierarchy and luxurious aesthetic.
+
+---
+
+### JSON OUTPUT SCHEMA
 
 {
   "theme": {
-    "summary": "1–2 sentences describing the flyer’s purpose, mood, and artistic direction.",
-    "tone": "string – e.g., 'luxurious', 'fresh', 'organic', 'energetic', 'elegant'",
-    "keywords": ["string list of descriptive ideas"],
-    "theme_colors": ["#hex1", "#hex2", "#hex3"],
-    "imagery_ideas": ["short creative image ideas supporting the theme visually"]
+    "summary": "1–2 sentences describing the flyer’s creative intent, audience, and artistic mood",
+    "tone": "luxurious | elegant | energetic | playful | futuristic | organic | bold | minimal",
+    "keywords": ["3–7 descriptive words or phrases conveying mood and style"],
+    "theme_colors": ["#hex1", "#hex2", "#hex3", "#hex4 (optional)"],
+    "imagery_ideas": ["short, descriptive visual concepts supporting the flyer’s theme"]
   },
 
   "texts": [
     {
       "content": "Exact text to appear on flyer",
-      "font_style": "serif | sans-serif | script | display | brush",
+      "font_style": "serif | sans-serif | display | brush | script",
       "font_size": "string (e.g., '72px')",
-      "font_color": "#hex or gradient(...)",
+      "font_color": "#hex or gradient(linear, #hex1, #hex2)",
       "angle": "string (e.g., '0deg', '-10deg')",
-      "text_shape": "straight | curved | diagonal | wavy | circular",
-      "style": ["bold", "italic", "shadow", "outline", "glow", "gradient", "emboss", "sticker"],
-      "position": "Top Left | Top Center | Center | Bottom Right | coordinates (x%, y%)",
+      "text_shape": "straight | curved | circular | wavy | diagonal",
+      "style": ["bold", "italic", "shadow", "glow", "gradient", "outline", "sticker"],
+      "position": "Top Left | Top Center | Center | Bottom Right | custom (x%, y%)",
       "priority": "high | medium | low",
       "layer": "foreground | background | overlay"
     }
@@ -38,46 +44,62 @@ JSON Schema (fill values based on the user prompt; do not include example values
   "layout": {
     "background": {
       "color": "#hex",
-      "texture": "gradient | paper | sky | abstract | metallic"
+      "texture": "gradient | paper | metallic | abstract | marble | soft-light",
+      "depth_effect": "none | glow | vignette | radial highlight"
     },
     "layout_shapes": [
       {
-        "shape": "circle | rectangle | banner | wave | floral | sticker | blob",
+        "shape": "circle | rectangle | banner | blob | wave | floral | sticker",
         "position": "Top | Center | Bottom | Left | Right | Top Left | Bottom Right",
-        "size": "string (e.g., '60%')",
-        "color": "#hex",
-        "opacity": 0.5-1.0,
-        "layer": "background | foreground"
+        "size": "string (e.g., '60%' or '480px')",
+        "color": "#hex or gradient(linear, #hex1, #hex2)",
+        "opacity": 0.4–1.0,
+        "layer": "background | foreground | overlay",
+        "style": ["blurred", "outlined", "glow", "translucent"]
       }
+      // Maximum 3 shapes allowed; only include shapes that are part of the design
     ],
-    "balance": "symmetrical | asymmetrical | diagonal | layered"
+    "balance": "symmetrical | asymmetrical | diagonal | layered | golden-ratio"
   },
 
   "images": [
     {
-      "description": "Background image matching flyer theme (detailed and renderable)",
+      "description": "Primary background image matching flyer mood and theme",
       "position": "Background",
       "size": "100%"
     },
     {
-      "description": "One image per shape (sticker, floral, wave or decorative element) placed above its shape",
+      "description": "Sub-images corresponding to each decorative shape present in the layout, matching its position and size",
       "position": "Match shape position",
       "size": "Match shape size"
     }
   ]
 }
 
-Constraints:
-- Do not include any commentary. Return only JSON matching the schema.
-- Ensure all position, layer, and size values are renderable (percentages or px).
-  
-Make the flyer design feel ultra-premium and visually striking, using:
-- layered lighting (subtle highlights, soft shadows)
-- golden or pearl gradients for accents
-- slightly translucent overlapping shapes
-- elegant curvature in composition (not flat)
-- luxurious typography interplay (script + display mix)
-- depth through shadowed layers and texture variation
+---
+
+### CONSTRAINTS
+- Output **JSON only**, no commentary, no markdown.  
+- Always include exactly **1 background image**.  
+- Include **sub-images only for the decorative shapes present** (up to 3 shapes).  
+- All positions, sizes, and layers must be renderable (% or px).  
+- Colors must be realistic hex codes or gradients.  
+- Maintain visual hierarchy: foreground text above shapes, shapes above background.  
+- Ensure symmetry, balance, and a visually pleasing flow.
+
+---
+
+### DESIGN DIRECTIVE
+Make the flyer feel like a high-end agency design. Incorporate:
+
+- Subtle **lighting & depth** (radial highlights, soft shadows, glow effects)  
+- **Layered composition** with overlapping shapes  
+- **Luxury typography interplay** (mix serif/script/display fonts)  
+- **Premium textures and finishes** (metallic, glass, pearl, soft gradients)  
+- Elegantly curved and balanced shapes  
+- Clear, readable, and expressive text hierarchy  
+
+Your JSON should be a **blueprint for the highest quality flyer**, ready to generate visuals with Stable Diffusion or similar image models.
 """
 
 

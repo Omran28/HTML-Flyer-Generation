@@ -162,19 +162,18 @@ def render_flyer_tab(final_state, tab):
             st.info("No flyer generated yet.")
             return
 
-        st.markdown(
-            "<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
+                    unsafe_allow_html=True)
 
-        image_path = display_HTML2Img(final_state.refined_html, "flyer_preview.png")
+        # Original HTML preview
+        st.markdown("### 📝 Original Flyer HTML")
+        st.components.v1.html(final_state.final_output, height=800, scrolling=True)
 
-        if os.path.exists(image_path):
-            st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
-        else:
-            st.warning("⚠️ Flyer image not available, showing HTML preview instead.")
-            st.components.v1.html(final_state.refined_html, height=800, scrolling=True)
+        # Refined HTML preview
+        st.markdown("### ✨ Refined Flyer HTML")
+        st.components.v1.html(final_state.refined_html, height=800, scrolling=True)
 
+        # Raw HTML
         with st.expander("🔍 View Raw HTML"):
             st.code(final_state.refined_html, language="html")
 
