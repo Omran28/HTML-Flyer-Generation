@@ -130,7 +130,6 @@ def generation_process(user_prompt: str, api_provider: str):
 
         # Render final HTML → display in Colab
         status_text.info("🖼️ Rendering flyer preview...")
-        image_path = display_HTML2Img(state.refined_html)
         progress_bar.progress(85)
 
         # Generate flyer summary
