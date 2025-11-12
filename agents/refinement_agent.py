@@ -22,7 +22,6 @@ def refinement_node(state: FlyerState) -> FlyerState:
         if json_match:
             result = json.loads(json_match.group(0))
             state.evaluation_json = result
-            # fallback to html_final if edited_html is missing
             state.html_refined = result.get("edited_html", state.html_final)
         else:
             state.evaluation_json = {"judgment": " Could not parse LLM output."}
