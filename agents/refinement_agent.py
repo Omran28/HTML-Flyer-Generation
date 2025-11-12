@@ -22,19 +22,25 @@ def refinement_node(state: FlyerState) -> FlyerState:
         if json_match:
             result = json.loads(json_match.group(0))
             state.evaluation_json = result
-            state.html_refined = result.get("edited_html", state.html_refined)
+            # fallback to html_final if edited_html is missing
+            state.html_refined = result.get("edited_html", state.html_final)
         else:
             state.evaluation_json = {"judgment": " Could not parse LLM output."}
+            state.html_refined = state.html_final
     except Exception as e:
         state.evaluation_json = {"judgment": f" Error: {e}"}
+        state.html_refined = state.html_final
 
     state.iteration_count += 1
     state.log(f" Iteration {state.iteration_count} completed. Judgment: {state.evaluation_json.get('judgment', '')}")
-    
 
-    # Save automatically
-    output_path = save_refined_html(state)
-    state.log(f"💾 Refined HTML saved to: {output_path}")
+    # Save automatically if html_refined exists
+    if state.html_refined:
+        output_path = save_refined_html(state)
+        state.log(f"💾 Refined HTML saved to: {output_path}")
+    else:
+        state.log("⚠️ No HTML to save after refinement.")
+
     return state
 
 
