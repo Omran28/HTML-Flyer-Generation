@@ -100,7 +100,7 @@ def image_generator_node(state: FlyerState) -> FlyerState:
             state.log(f"✅ Generated and embedded image {i+1} successfully.")
 
         # --- Inject images into HTML ---
-        html = state.final_output or "<div></div>"
+        html = state.html_output or "<div></div>"
         POS_MAP = {
             "Top Left": (8, 8), "Top Center": (50, 8), "Top Right": (92, 8),
             "Center": (50, 50), "Bottom Left": (8, 92), "Bottom Center": (50, 92),
@@ -124,9 +124,9 @@ def image_generator_node(state: FlyerState) -> FlyerState:
                             z-index:{z_index}; pointer-events:none; border-radius:10px;"/>
                 """
 
-            state.refined_html = opening_div + ">" + img_tags + rest_html
+            state.html_final = opening_div + ">" + img_tags + rest_html
         else:
-            state.refined_html = html
+            state.html_final = html
             state.log("⚠️ Could not inject images into HTML — using original HTML.")
 
         # Save results in state

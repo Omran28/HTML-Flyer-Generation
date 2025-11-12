@@ -234,7 +234,7 @@ def theme_analyzer_node(state: FlyerState) -> FlyerState:
     user_prompt = state.user_prompt.strip()
     if not user_prompt:
         state.log("❌ Empty prompt. Skipping theme analysis.")
-        state.final_output = "<p style='color:red;'>Empty prompt.</p>"
+        state.html_output = "<p style='color:red;'>Empty prompt.</p>"
         return state
 
     llm = initialize_llm()
@@ -253,21 +253,21 @@ def theme_analyzer_node(state: FlyerState) -> FlyerState:
             raise ValueError(f"Missing keys in LLM output: {missing}")
 
         state.theme_json = parsed
-        state.final_output = generate_flyer_html(parsed)
+        state.html_output = generate_flyer_html(parsed)
 
         state.log("✅ Theme analysis completed successfully.")
-        state.log("✅ Flyer HTML generated and stored in state.final_output.")
+        state.log("✅ Flyer HTML generated and stored in state.html_output.")
 
     except json.JSONDecodeError:
         err = "❌ Failed to decode JSON from Gemini output."
         state.log(err)
         state.theme_json = {"error": "Invalid JSON structure"}
-        state.final_output = f"<p style='color:red;'>{err}</p>"
+        state.html_output = f"<p style='color:red;'>{err}</p>"
 
     except Exception as e:
         err = f"❌ Unexpected error during theme generation: {e}"
         state.log(err)
         state.theme_json = {"error": str(e)}
-        state.final_output = f"<p style='color:red;'>{err}</p>"
+        state.html_output = f"<p style='color:red;'>{err}</p>"
 
     return state

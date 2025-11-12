@@ -14,7 +14,7 @@ model = initialize_llm()
 def refinement_node(state: FlyerState) -> FlyerState:
     state.log(f" [refinement_node] Iteration {state.iteration_count} — sending HTML to Gemini for review & edit.")
 
-    prompt = refinement_prompt.replace("{final_output}", state.final_output)
+    prompt = refinement_prompt.replace("{html_final}", state.html_final)
     try:
         response = model.generate_content(prompt)
         result_text = response.text.strip()

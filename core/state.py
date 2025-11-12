@@ -9,13 +9,11 @@ class FlyerState:
 
     # Intermediate stage outputs
     theme_json: Dict[str, Any] = field(default_factory=dict)        # Theme extraction output (colors, fonts, composition)
-    text_json: Dict[str, Any] = field(default_factory=dict)         # Generated texts like title, subtitle, slogans
-    image_json: Dict[str, Any] = field(default_factory=dict)        # Generated background and visual assets
     html_output: str = ""                                           # HTML layout composed of all assets
     evaluation_json: Dict[str, Any] = field(default_factory=dict)   # Evaluation results for refinement or scoring
 
     # Final outputs
-    final_output: str = ""        # Final HTML flyer layout after refinement
+    html_final: str = ""        # Final HTML flyer layout after refinement
     refined_html: str = ""        # HTML after images and refinement
     flyer_summary: str = ""       # Textual description of the generated flyer
     generated_images: List[str] = field(default_factory=list)  # Paths to generated images

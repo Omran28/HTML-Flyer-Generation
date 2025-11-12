@@ -165,8 +165,12 @@ def render_flyer_tab(final_state, tab):
         st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
                     unsafe_allow_html=True)
 
+        # Original HTML preview
+        st.markdown("### 📝 Original Flyer HTML")
+        st.components.v1.html(final_state.html_final, height=800, scrolling=True)
+
         # Refined HTML preview
-        st.markdown("### Flyer Preview")
+        st.markdown("### ♻️ Refined Flyer Preview")
         st.components.v1.html(final_state.refined_html, height=800, scrolling=True)
 
         # Raw HTML

@@ -118,7 +118,7 @@ You are an expert visual designer and HTML flyer reviewer.
 {{ "judgment": "<your review and score>", "edited_html": "<the improved HTML code>" }}
 
 Here is the flyer HTML:
-{final_output}
+{html_final}
 """
 
 
