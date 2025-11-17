@@ -1,11 +1,22 @@
 import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import streamlit as st
-from core.state import FlyerState
-from utils.summary_utils import generate_summary
-from agents.theme_agent import display_HTML2Img
-from core.workflow import create_workflow
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.summary_utils import generate_summary
+from agents.theme_agent import *
+from agents.refinement_agent import *
+from agents.image_agent import *
+import streamlit as st
+
+# --- MODIFIED ---
+# Make sure all necessary functions are imported
+# (The * imports already handle this, but explicit is better)
+# from agents.theme_agent import theme_analyzer_node, generate_flyer_html, save_html_final
+# from agents.image_agent import image_generator_node
+# from agents.refinement_agent import refinement_node
+# from utils.summary_utils import generate_summary
+# ----------------
+
+sys.path.append("/content/drive/MyDrive/Beyond HTML Flyer Generation Project/HTML-Flyer-Generation")
 
 
 def create_interface(model, api):
@@ -36,7 +47,8 @@ def create_interface(model, api):
 
     # Header
     st.markdown("<div class='main-title centered'>🏞️ HTML Flyer Generator</div>", unsafe_allow_html=True)
-    st.markdown("<div class='main-subtitle centered'>AI-powered flyer creation with professional layouts</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-subtitle centered'>AI-powered flyer creation with professional layouts</div>",
+                unsafe_allow_html=True)
 
     # Session state init
     if "generate_clicked" not in st.session_state:
@@ -59,7 +71,7 @@ def create_interface(model, api):
 
 def render_sidebar(model):
     with st.sidebar:
-        st.markdown("<div class='sidebar-header'>⚙️ Settings & Quick Guide</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sidebar-header'>⚙️ Settings</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='card'><b>LLM Model:</b> {model}</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='sidebar-header'>🔖 Quick Guide</div>", unsafe_allow_html=True)
@@ -88,7 +100,8 @@ def render_prompt_section():
 
 
 def handle_generation(user_prompt, api_provider, ):
-    st.markdown("<div class='card'><div class='section-title'>✨ Convert Instructions into Visual</div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'><div class='section-title'>✨ Convert Instructions into Visual</div></div>",
+                unsafe_allow_html=True)
 
     if st.button("🚀 Generate Flyer", type="primary", use_container_width=True):
         st.session_state.generate_clicked = True
@@ -96,10 +109,12 @@ def handle_generation(user_prompt, api_provider, ):
         generation_process(user_prompt, api_provider)
 
 
+# --- MODIFIED: generation_process ---
+# This now follows the new logical workflow
 def generation_process(user_prompt: str, api_provider: str):
     progress_bar = st.progress(0)
     status_text = st.empty()
-    image_path = None
+    image_path = None  # This seems unused in your original, but I'll keep it
 
     try:
         status_text.info("🚀 Initializing workflow...")
@@ -112,18 +127,34 @@ def generation_process(user_prompt: str, api_provider: str):
         state = FlyerState(user_prompt=user_prompt.strip(), api_provider=api_provider)
         progress_bar.progress(20)
 
-        # Create and compile workflow
-        status_text.info("🎨 Running flyer workflow (theme, images, refinement)...")
-        workflow = create_workflow()
-        state = workflow.invoke(state)
-        progress_bar.progress(70)
+        # 1. THEME AGENT (Analyze Plan)
+        status_text.info("🎨 Analyzing theme... (Creating JSON plan)")
+        state = theme_analyzer_node(state)
+        progress_bar.progress(35)
 
-        # Render final HTML → Image
-        status_text.info("🖼️ Rendering flyer preview...")
-        image_path = display_HTML2Img(state.final_output)
+        if state.theme_json.get("error"):
+            raise Exception(f"Theme analysis failed: {state.theme_json['error']}")
+
+        # 2. IMAGE AGENT (Generate Assets)
+        status_text.info("🖼️ Generating images... (Enriching JSON plan)")
+        state = image_generator_node(state)
+        progress_bar.progress(60)
+
+        # 3. --- NEW STEP: HTML ASSEMBLER ---
+        status_text.info("🧩 Assembling HTML... (Building from enriched JSON)")
+        # This function now builds the HTML from the *complete* JSON plan
+        state.html_output = generate_flyer_html(state.theme_json)
+        state.html_final = state.html_output  # This is the "base" HTML for refinement
+        save_html_final(state)  # Save the first assembled version
+        progress_bar.progress(75)
+
+        # 4. REFINEMENT AGENT (Polish)
+        status_text.info("🛠️ Refining HTML...")
+        # Refinement agent now receives a *correctly built* HTML file
+        state = refinement_node(state)
         progress_bar.progress(85)
 
-        # Generate flyer summary
+        # 5. SUMMARY
         status_text.info("📝 Generating flyer summary...")
         state.flyer_summary = generate_summary(state.theme_json)
         progress_bar.progress(95)
@@ -143,28 +174,30 @@ def generation_process(user_prompt: str, api_provider: str):
         st.session_state.processing_complete = True
 
     finally:
+        # This was in your original code, seems to be a remnant
         st.session_state._latest_image = image_path
 
 
-def render_flyer_tab(final_state, tab, image_path):
+def render_flyer_tab(final_state, tab):
     with tab:
-        if not final_state or not getattr(final_state, "refined_html", None):
+        if not final_state or not getattr(final_state, "html_refined", None):
             st.info("No flyer generated yet.")
             return
 
-        st.markdown(
-            "<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
+                    unsafe_allow_html=True)
 
-        if image_path:
-            st.image(image_path, caption="🖼️ Generated Flyer Preview", use_container_width=True)
-        else:
-            st.warning("⚠️ Flyer image not available.")
+        # --- MODIFIED: Labels are clearer now ---
+        st.markdown("### 📝 Assembled Flyer (Before Refinement)")
+        # html_final is now the *correctly assembled* HTML
+        st.components.v1.html(final_state.html_final, height=800, scrolling=True)
 
-        # Raw HTML (refined with images)
-        with st.expander("🔍 View Raw HTML"):
-            st.code(final_state.refined_html, language="html")
+        st.markdown("### ♻️ Polished Flyer (After Refinement)")
+        st.components.v1.html(final_state.html_refined, height=800, scrolling=True)
+
+        # Raw HTML
+        with st.expander("🔍 View Refined HTML Code"):
+            st.code(final_state.html_refined, language="html")
 
 
 def render_summary_tab(final_state, tab):
@@ -195,7 +228,7 @@ def render_summary_tab(final_state, tab):
         )
 
         # JSON
-        with st.expander("🧩 Theme JSON"):
+        with st.expander("🧩 Final Enriched Theme JSON (with Image Paths)"):
             st.json(final_state.theme_json)
 
 
@@ -204,14 +237,13 @@ def render_results():
     st.header("📊 Results Overview")
 
     final_state = st.session_state.get("final_state", None)
-    image_path = st.session_state.get("_latest_image", None)
 
     if not final_state:
         st.info("✏️ Write your flyer instructions above and click **Generate** to see the results.")
         return
 
     tabs = st.tabs(["🏞️ Generated Flyer", "📈 Flyer Summary"])
-    render_flyer_tab(final_state, tabs[0], image_path)
+    render_flyer_tab(final_state, tabs[0])
     render_summary_tab(final_state, tabs[1])
 
 
@@ -227,3 +259,6 @@ def render_footer():
         unsafe_allow_html=True
     )
 
+# --- Main execution (if needed, assuming you have a main.py to call this) ---
+# if __name__ == "__main__":
+#     create_interface(model="Gemini", api="...")

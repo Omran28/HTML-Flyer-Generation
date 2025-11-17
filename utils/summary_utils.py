@@ -6,17 +6,19 @@ def generate_summary(flyer_json: dict) -> str:
     texts = flyer_json.get("texts", [])
     layout = flyer_json.get("layout", {})
 
-    # Title & subtitle fallback
-    title = texts[0]["content"] if texts else "Untitled Flyer"
-    subtitle = texts[1]["content"] if len(texts) > 1 else ""
+    # --- MODIFIED: Use .get() for safe access ---
+    # This prevents KeyError if a text object is missing a "content" key
+
+    title = texts[0].get("content", "Untitled Flyer") if texts else "Untitled Flyer"
+    subtitle = texts[1].get("content", "") if len(texts) > 1 else ""
 
     # Tone
     tone = theme.get("tone", "neutral")
 
-    # Key text content (first 3 items)
+    # Key text content (this was already safe, good job)
     text_preview = ", ".join([t.get("content", "") for t in texts[:3]])
 
-    # Layout elements
+    # Layout elements (this was also safe)
     shapes = layout.get("layout_shapes", [])
     shapes_summary = ", ".join([s.get("shape", "") for s in shapes]) or "standard layout"
 

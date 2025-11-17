@@ -1,9 +1,17 @@
+"""
+Image Agent
+- Reads image descriptions from theme_json.
+- Generates images using Stable Diffusion.
+- Saves images locally.
+- *Enriches* the theme_json with the local image paths.
+"""
+
 from core.state import FlyerState
 from typing import List
-import torch
+import torch, base64, os, mimetypes
 from diffusers import DiffusionPipeline
 
-# Load Stable Diffusion globally
+# Load Stable Diffusion once globally
 pipe = DiffusionPipeline.from_pretrained(
     "runwayml/stable-diffusion-v1-5",
     torch_dtype=torch.float16,
@@ -12,6 +20,9 @@ pipe = DiffusionPipeline.from_pretrained(
 pipe.enable_xformers_memory_efficient_attention()
 
 
+# -------------------------------
+# Utilities
+# -------------------------------
 def parse_size(size_str: str) -> str:
     if not size_str:
         return "auto"
@@ -24,6 +35,19 @@ def parse_size(size_str: str) -> str:
         return "auto"
 
 
+def image_to_data_uri(path: str) -> str:
+    """Convert image file to base64 URI for inline HTML embedding."""
+    if not path or not os.path.exists(path):
+        return ""
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{mime};base64,{data}"
+
+
+# -------------------------------
+# Extract images from theme_json
+# -------------------------------
 def extract_image_attributes(state: FlyerState):
     parsed = getattr(state, "theme_json", {}) or {}
     images = parsed.get("images", [])
@@ -33,8 +57,7 @@ def extract_image_attributes(state: FlyerState):
         return {"count": 0, "images": []}
 
     for img in images:
-        if not isinstance(img, dict):
-            continue
+        if not isinstance(img, dict): continue
 
         description = img.get("description", "").strip()
         position = img.get("position", "Center")
@@ -58,67 +81,100 @@ def extract_image_attributes(state: FlyerState):
     return {"count": len(normalized_images), "images": normalized_images}
 
 
+# -------------------------------
+# Generate images and embed into HTML
+# -------------------------------
 def image_generator_node(state: FlyerState) -> FlyerState:
     try:
         images_info = extract_image_attributes(state)
         num_images = images_info["count"]
         images_metadata = images_info["images"]
-
-        generated_images: List[str] = []
+        generated_images_data: List[dict] = []  # Stores the generated data
 
         for i, img_meta in enumerate(images_metadata):
-            prompt = f"{img_meta['description']} design for flyer, premium, elegant, professional"
-            state.log(f"🖼️ Generating image {i+1}/{num_images}: {prompt}")
+            prompt = f"{img_meta['description']}, premium, elegant, professional flyer design"
+            state.log(f"🖼️ Generating image {i + 1}/{num_images}: {prompt}")
 
-            img = pipe(
-                prompt,
-                num_inference_steps=30,
-                guidance_scale=7.5,
-            ).images[0]
+            try:
+                img = pipe(
+                    prompt,
+                    num_inference_steps=25,
+                    guidance_scale=7.5,
+                ).images[0]
 
-            file_path = f"temp_flyer_image_{i}.png"
-            img.save(file_path)
-            generated_images.append(file_path)
+                # Save image locally
+                file_path = save_image_locally(img, i)
+                data_uri = image_to_data_uri(file_path)  # For Streamlit preview
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+                # Prepare the data to enrich the JSON
+                generated_images_data.append({
+                    **img_meta,
+                    "path": file_path,  # Relative path for HTML
+                    "src": file_path,  # Alias for path
+                    "preview_uri": data_uri  # Full Base64 for ST
+                })
 
-            state.log(f"✅ Generated image saved at {file_path}")
+                if torch.cuda.is_available(): torch.cuda.empty_cache()
+                state.log(f"✅ Generated image {i + 1} successfully.")
 
-        # Inject images into HTML
-        html = state.final_output or "<div></div>"
-        POS_MAP = {
-            "Top Left": (8, 8), "Top Center": (50, 8), "Top Right": (92, 8),
-            "Center": (50, 50), "Bottom Left": (8, 92), "Bottom Center": (50, 92),
-            "Bottom Right": (92, 92), "Left": (6, 50), "Right": (94, 50),
-            "Top": (50, 6), "Bottom": (50, 94)
-        }
+            except Exception as e:
+                state.log(f"❌ Failed to generate image {i + 1}: {e}")
 
-        html_parts = html.split(">", 1)
-        if len(html_parts) == 2:
-            opening_div, rest_html = html_parts
-            img_tags = ""
-            for img_path, img_meta in zip(generated_images, images_metadata):
-                xperc, yperc = POS_MAP.get(img_meta["position"], (50, 50))
-                img_tags += f"""
-                <img src="{img_path}" style="position:absolute; top:{yperc}%; left:{xperc}%;
-                    width:{img_meta['size']}; height:{img_meta['size']}; transform:translate(-50%, -50%);
-                    z-index:{2 if img_meta['layer']=='foreground' else 0}; pointer-events:none;"/>
-                """
-            state.refined_html = opening_div + ">" + img_tags + rest_html
+        # -------------------------------
+        # --- MODIFIED: Enrich theme_json ---
+        # Instead of injecting HTML, we update the JSON plan
+        # -------------------------------
+
+        json_images_list = state.theme_json.get("images", [])
+
+        if len(generated_images_data) == len(json_images_list):
+            for i, generated_data in enumerate(generated_images_data):
+                # Add the new keys to the *original* JSON object
+                json_images_list[i]["path"] = generated_data["path"]
+                json_images_list[i]["src"] = generated_data["src"]
+
+                # Truncate preview_uri for Streamlit display
+                MAX_BASE64_LEN = 5000
+                if len(generated_data["preview_uri"]) > MAX_BASE64_LEN:
+                    preview = "data:image/png;base64,iVBORw0KGgoAAA..."
+                else:
+                    preview = generated_data["preview_uri"]
+
+                json_images_list[i]["preview_uri"] = preview
+
+            state.log(f"✅ Enriched state.theme_json with {len(generated_images_data)} image paths.")
         else:
-            state.refined_html = html
-            state.log("⚠️ Could not inject images into HTML, using original HTML")
+            state.log(
+                f"⚠️ Mismatch between images requested ({len(json_images_list)}) and generated ({len(generated_images_data)}). JSON enrichment skipped.")
 
-        # Save generated images paths
-        state.generated_images = generated_images
+        # -------------------------------
+        # --- REMOVED: HTML Injection Logic ---
+        # All the `html.split` and `img_tags` logic is GONE.
+        # This agent no longer creates or modifies HTML.
+        # -------------------------------
 
-        # Optionally, update final_output for downstream steps
-        state.final_output = state.refined_html or state.final_output
+        # Save paths of generated images
+        state.generated_images = [img["path"] for img in generated_images_data]
+        state.log(f"🚀 Image generation completed ({len(generated_images_data)} images).")
 
-        state.log(f"🚀 Image generation and injection completed ({num_images} images).")
+        # --- REMOVED ---
+        # save_html_final(state) 
+        # This function is removed from this agent.
 
     except Exception as e:
-        state.log(f"❌ [image_generator_node] Error: {str(e)}")
+        state.log(f"❌ [image_generator_node] Critical error: {e}")
 
     return state
+
+
+# -------------------------------
+# --- REMOVED: save_html_final ---
+# This function has been moved to theme_agent.py
+# -------------------------------
+
+def save_image_locally(img, index=0, folder="flyer_images"):
+    """Save PIL image to local disk and return relative path."""
+    os.makedirs(folder, exist_ok=True)
+    file_path = os.path.join(folder, f"flyer_img_{index}.png")
+    img.save(file_path)
+    return file_path
