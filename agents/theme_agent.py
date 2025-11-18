@@ -1,11 +1,11 @@
 """
-agents/theme.py
-----------------
-Theme Analyzer Agent (3-Node Version)
+agents/theme_agent.py
+---------------------
+Theme Analyzer Agent (Node 1 of 3)
 
-• Node 1: Analyzes user prompt to create the JSON plan.
+• Analyzes user prompt to create the JSON plan.
 • Generates the *Skeleton HTML* (Layout, Text, Shapes, Colors).
-• Does NOT generate images (Image Agent does that next).
+• CRITICAL: Sets correct z-indexes so shapes don't cover text.
 """
 
 import os, re, json
@@ -129,7 +129,7 @@ def generate_flyer_html(parsed: dict) -> str:
     ]
 
     # -----------------------
-    # Shapes
+    # Shapes (Background Layer)
     # -----------------------
     for shape in shapes:
         s_type = shape.get("shape", "rectangle")
@@ -140,13 +140,14 @@ def generate_flyer_html(parsed: dict) -> str:
         s_color_raw = shape.get("color", "#FFFFFF")
         s_color = get_valid_color(s_color_raw)
 
-        s_opacity = safe_float(shape.get("opacity", 0.9), 0.9)
+        # Fix: Limit opacity so text is visible behind shapes
+        s_opacity = min(safe_float(shape.get("opacity", 0.9), 0.9), 0.6)
         s_layer = shape.get("layer", "background")
 
-        # Fix for Pile-Up
         xperc, yperc = get_position(s_pos)
 
-        z_index = 0 if s_layer == "background" else 1
+        # CRITICAL FIX: Z-Index 0 for shapes
+        z_index = 0
 
         w = h = s_size if "px" in str(s_size) else f"{safe_float(s_size, 40)}%"
 
@@ -171,7 +172,7 @@ def generate_flyer_html(parsed: dict) -> str:
         """)
 
     # -----------------------
-    # Texts
+    # Texts (Foreground Layer)
     # -----------------------
     for idx, t in enumerate(texts):
         if isinstance(t, dict):
@@ -183,14 +184,13 @@ def generate_flyer_html(parsed: dict) -> str:
             text_shape = t.get("text_shape", "straight")
             style_list = t.get("style", []) or []
             pos = t.get("position", "Center")
-            layer = t.get("layer", "foreground")
         else:
             continue
 
-        # Fix for Pile-Up
         xperc, yperc = get_position(pos)
 
-        z_index = 3 if layer == "foreground" else 1
+        # CRITICAL FIX: Z-Index 3 for Text (Always on top)
+        z_index = 3
         font_weight = "700" if "bold" in style_list else "400"
         font_style_css = "italic" if "italic" in style_list else "normal"
 
