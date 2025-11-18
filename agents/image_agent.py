@@ -1,13 +1,22 @@
+"""
+agents/image_agent.py
+---------------------
+Image Generator Agent (3-Node Workflow)
+
+• Generates images using Stable Diffusion.
+• Saves images locally to 'flyer_images/' folder (Small HTML size).
+• Injects <img> tags into the HTML skeleton created by the Theme Agent.
+"""
+
 import os
 import torch
-from typing import List
+import re
 from diffusers import DiffusionPipeline
 from core.state import FlyerState
 
 # ==========================================================
 # Global Model Initialization
 # ==========================================================
-# Load Stable Diffusion once to avoid reloading on every run
 try:
     pipe = DiffusionPipeline.from_pretrained(
         "runwayml/stable-diffusion-v1-5",
@@ -17,7 +26,6 @@ try:
     pipe.enable_xformers_memory_efficient_attention()
 except Exception as e:
     print(f"⚠️ Warning: Could not load Stable Diffusion on CUDA. Error: {e}")
-    # Fallback or just pass if running locally without GPU for testing logic
     pipe = None
 
 
@@ -25,7 +33,6 @@ except Exception as e:
 # Utilities
 # ==========================================================
 def parse_size(size_str: str) -> str:
-    """Fixes the 'NameError' by defining this helper here."""
     if not size_str:
         return "auto"
     size_str = str(size_str).strip()
@@ -36,27 +43,26 @@ def parse_size(size_str: str) -> str:
     except ValueError:
         return "auto"
 
+
 def save_image_locally(img, index, folder="flyer_images"):
     """
-    Saves the image to a folder and returns the relative path.
-    This prevents the HTML file from becoming huge.
+    Saves image locally and returns a web-friendly path.
+    CRITICAL: Replaces backslashes with forward slashes for HTML compatibility.
     """
     os.makedirs(folder, exist_ok=True)
     filename = f"flyer_img_{index}.png"
     file_path = os.path.join(folder, filename)
     img.save(file_path)
-    return file_path
+    # Force forward slashes (HTML standard) even on Windows
+    return file_path.replace("\\", "/")
+
 
 def save_html_final(state: FlyerState, filename="flyer_final.html") -> str:
-    """Saves the modified HTML to disk."""
-    if not hasattr(state, "html_final") or not state.html_final:
-        # Fallback if html_final is empty, save html_output instead
-        content = getattr(state, "html_output", "")
-    else:
-        content = state.html_final
+    """Saves the final HTML with image links."""
+    # Use refined HTML if available, otherwise final, otherwise output
+    content = state.html_refined or state.html_final or getattr(state, "html_output", "")
 
     if not content:
-        print("⚠️ No HTML content to save.")
         return ""
 
     os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
@@ -65,8 +71,8 @@ def save_html_final(state: FlyerState, filename="flyer_final.html") -> str:
 
     return os.path.abspath(filename)
 
+
 def extract_image_attributes(state: FlyerState):
-    """Reads the plan from theme_json to know what images to generate."""
     parsed = getattr(state, "theme_json", {}) or {}
     images = parsed.get("images", [])
     normalized_images = []
@@ -75,14 +81,14 @@ def extract_image_attributes(state: FlyerState):
         return {"count": 0, "images": []}
 
     for img in images:
-        if not isinstance(img, dict):
-            continue
+        if not isinstance(img, dict): continue
 
         description = img.get("description", "").strip()
         position = img.get("position", "Center")
         size = parse_size(img.get("size", "auto"))
 
-        pos_lower = position.lower()
+        # Infer layer based on position name
+        pos_lower = str(position).lower()
         if "background" in pos_lower:
             layer = "background"
         elif "overlay" in pos_lower:
@@ -115,18 +121,18 @@ def image_generator_node(state: FlyerState) -> FlyerState:
         # 2. Generate Images Loop
         for i, img_meta in enumerate(images_metadata):
             prompt = f"{img_meta['description']} design for flyer, premium, elegant, professional"
-            state.log(f"🖼️ Generating image {i+1}/{num_images}: {prompt}")
+            state.log(f"🖼️ Generating image {i + 1}/{num_images}: {prompt}")
 
             if pipe:
                 try:
-                    # Generate
+                    # Generate (Reduced steps for speed/stability)
                     img = pipe(
                         prompt,
-                        num_inference_steps=25, # Lower steps for faster testing
+                        num_inference_steps=25,
                         guidance_scale=7.5,
                     ).images[0]
 
-                    # SAVE LOCALLY (Fixes the "huge src" issue)
+                    # Save Locally
                     file_path = save_image_locally(img, index=i)
 
                     generated_images_data.append({
@@ -134,29 +140,42 @@ def image_generator_node(state: FlyerState) -> FlyerState:
                         "path": file_path,
                     })
 
-                    state.log(f"✅ Generated image {i+1} saved to {file_path}")
+                    state.log(f"✅ Generated image {i + 1} saved to {file_path}")
 
-                    # Clear GPU memory
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
 
                 except Exception as e:
-                    state.log(f"❌ SD Generation Error for image {i+1}: {e}")
+                    state.log(f"❌ SD Generation Error for image {i + 1}: {e}")
             else:
                 state.log("⚠️ Model not loaded, skipping generation (Mock Mode)")
 
-        # 3. Inject Images into HTML (3-Node Workflow Style)
+        # 3. Inject Images into HTML (3-Node Workflow)
         html = state.html_output or "<div></div>"
 
-        # Mapping for positions
-        POS_MAP = {
-            "Top Left": (8, 8), "Top Center": (50, 8), "Top Right": (92, 8),
-            "Center": (50, 50), "Bottom Left": (8, 92), "Bottom Center": (50, 92),
-            "Bottom Right": (92, 92), "Left": (6, 50), "Right": (94, 50),
-            "Top": (50, 6), "Bottom": (50, 94)
-        }
+        # Smart Position Mapper (Matches Theme Agent logic)
+        def get_pos_coords(pos_name):
+            s = str(pos_name).lower().strip()
+            # Custom regex check
+            if "custom" in s or "%" in s:
+                try:
+                    nums = re.findall(r"[\d\.]+", s)
+                    if len(nums) >= 2: return (float(nums[0]), float(nums[1]))
+                except:
+                    pass
 
-        # Split HTML to inject <img> tags
+            POS_MAP = {
+                "top left": (8, 8), "top center": (50, 8), "top right": (92, 8),
+                "center": (50, 50), "bottom left": (8, 92), "bottom center": (50, 92),
+                "bottom right": (92, 92), "left": (6, 50), "right": (94, 50),
+                "top": (50, 6), "bottom": (50, 94)
+            }
+            # Soft match
+            for key, coords in POS_MAP.items():
+                if key in s: return coords
+            return (50, 50)
+
+        # Inject Logic
         html_parts = html.split(">", 1)
 
         if len(html_parts) == 2:
@@ -164,29 +183,36 @@ def image_generator_node(state: FlyerState) -> FlyerState:
             img_tags = ""
 
             for img_data in generated_images_data:
-                xperc, yperc = POS_MAP.get(img_data["position"], (50, 50))
-                z_index = 0 if img_data["layer"] == "background" else 2
+                xperc, yperc = get_pos_coords(img_data["position"])
 
-                # --- CRITICAL FIX: Use clean file path ---
+                # Layering: Background (0), Overlay (1), Foreground (2). Text is usually (3).
+                if img_data["layer"] == "background":
+                    z_index = 0
+                    # Make background cover full container if requested
+                    style_dims = "width:100%; height:100%;" if "100%" in img_data[
+                        "size"] else f"width:{img_data['size']}; height:{img_data['size']};"
+                else:
+                    z_index = 2
+                    style_dims = f"width:{img_data['size']}; height:{img_data['size']};"
+
                 src_path = img_data["path"]
 
                 img_tags += f"""
                 <img src="{src_path}" 
                      style="position:absolute; top:{yperc}%; left:{xperc}%;
-                            width:{img_data['size']}; height:{img_data['size']};
+                            {style_dims}
                             transform:translate(-50%, -50%);
                             z-index:{z_index}; pointer-events:none; border-radius:10px; object-fit:cover;"/>
                 """
 
-            # Reassemble HTML
+            # Reassemble
             state.html_final = opening_div + ">" + img_tags + rest_html
         else:
             state.html_final = html
             state.log("⚠️ HTML structure invalid (no closing > found), skipping injection.")
 
-        # 4. Save Final Results
+        # 4. Save Results
         state.generated_images = [img["path"] for img in generated_images_data]
-
         output_path = save_html_final(state)
         state.log(f"💾 HTML with images saved to: {output_path}")
 
