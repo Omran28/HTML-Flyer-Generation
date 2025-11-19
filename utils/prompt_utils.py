@@ -126,7 +126,7 @@ DESCRIPTIVE_SUMMARY_PROMPT = """
 You are a visual designer.
 
 Task:
-Summarize the flyer design in 1-2 sentences,
+Summarize the flyer design in details describing everything you see in design wise,
 as if describing it to a client.
 
 Focus on color mood, style, layout, and key content.

@@ -1,24 +1,11 @@
-"""
-agents/theme_agent.py
----------------------
-Theme Analyzer Agent (Node 1 of 3)
-
-• Analyzes user prompt to create the JSON plan.
-• Generates the *Skeleton HTML* (Layout, Text, Shapes, Colors).
-• CRITICAL: Sets correct z-indexes so shapes don't cover text.
-"""
-
 import os, re, json
 from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
 
 
-# ==========================================================
-# Utility: Robust Parsers
-# ==========================================================
+
 def safe_float(value, default=0.0):
-    """Convert strings like '85%' or '100px' safely to float."""
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
@@ -37,52 +24,44 @@ def safe_float(value, default=0.0):
             return default
     return default
 
+
 def get_position(pos_str: str):
-    """
-    Smart position parser that handles 'custom(x,y)' and fuzzy text.
-    Fixes the issue where text piles up in the center.
-    """
     if not pos_str:
-        return (50, 50)
+        return 50, 50
 
     s = str(pos_str).lower().strip()
 
-    # 1. Handle "custom (50%, 20%)" from your JSON
+    # 1. Handle "custom (50%, 20%)" from JSON
     if "custom" in s or "%" in s:
-        try:
-            # Extract all numbers (integers or floats)
-            nums = re.findall(r"[\d\.]+", s)
-            if len(nums) >= 2:
-                # Return the first two numbers found as (x, y)
-                return (float(nums[0]), float(nums[1]))
-        except:
-            pass # Fallback if parsing fails
+        # Extract all numbers (integers or floats)
+        nums = re.findall(r"[\d.]+", s)
+        if len(nums) >= 2:
+            # Return the first two numbers found as (x, y)
+            return float(nums[0]), float(nums[1])
+
 
     # 2. Fuzzy Matching for standard words
-    if "top" in s and "left" in s: return (8, 8)
-    if "top" in s and "right" in s: return (92, 8)
-    if "top" in s and "center" in s: return (50, 8)
+    if "top" in s and "left" in s: return 8, 8
+    if "top" in s and "right" in s: return 92, 8
+    if "top" in s and "center" in s: return 50, 8
 
-    if "bottom" in s and "left" in s: return (8, 92)
-    if "bottom" in s and "right" in s: return (92, 92)
-    if "bottom" in s and "center" in s: return (50, 92)
+    if "bottom" in s and "left" in s: return 8, 92
+    if "bottom" in s and "right" in s: return 92, 92
+    if "bottom" in s and "center" in s: return 50, 92
 
-    if "center" in s: return (50, 50)
+    if "center" in s: return 50, 50
 
     # Edge centers
-    if "left" in s: return (6, 50)
-    if "right" in s: return (94, 50)
-    if "top" in s: return (50, 6)
-    if "bottom" in s: return (50, 94)
+    if "left" in s: return 6, 50
+    if "right" in s: return 94, 50
+    if "top" in s: return 50, 6
+    if "bottom" in s: return 50, 94
 
     # Default fallback
-    return (50, 50)
+    return 50, 50
+
 
 def get_valid_color(color_str: str, default="#333333") -> str:
-    """
-    Ensures SVGs don't get CSS gradients in 'fill' attributes (which breaks them).
-    If a gradient is detected, it extracts the first hex code as a fallback.
-    """
     if not color_str: return default
 
     if "gradient" in str(color_str).lower():
@@ -93,23 +72,14 @@ def get_valid_color(color_str: str, default="#333333") -> str:
     return color_str
 
 
-# ==========================================================
-# HTML Generator (Skeleton Builder)
-# ==========================================================
+
 def generate_flyer_html(parsed: dict) -> str:
-    """
-    Generate the HTML Skeleton.
-    Includes: Layout container, Background Color, Shapes, Text, Gradients.
-    Excludes: Dynamic Images (The Image Agent will inject these later).
-    """
     theme = parsed.get("theme", {})
     texts = parsed.get("texts", [])
     layout = parsed.get("layout", {})
     shapes = layout.get("layout_shapes", [])
 
     width_px, height_px = 800, 600
-
-    # Base background color (Image Agent might overlay a real image later)
     bg_color = layout.get("background", {}).get("color", theme.get("theme_colors", ["#FFFFFF"])[0])
 
     html_parts = [
@@ -128,25 +98,22 @@ def generate_flyer_html(parsed: dict) -> str:
         """
     ]
 
-    # -----------------------
     # Shapes (Background Layer)
-    # -----------------------
     for shape in shapes:
         s_type = shape.get("shape", "rectangle")
         s_pos = shape.get("position", "Center")
         s_size = shape.get("size", "40%")
 
-        # Fix for SVG gradient issue
+        # SVG gradient
         s_color_raw = shape.get("color", "#FFFFFF")
         s_color = get_valid_color(s_color_raw)
 
-        # Fix: Limit opacity so text is visible behind shapes
+        # Limit opacity so text is visible behind shapes
         s_opacity = min(safe_float(shape.get("opacity", 0.9), 0.9), 0.6)
-        s_layer = shape.get("layer", "background")
 
-        xperc, yperc = get_position(s_pos)
+        x_perc, y_perc = get_position(s_pos)
 
-        # CRITICAL FIX: Z-Index 0 for shapes
+        # Z-Index 0 for shapes
         z_index = 0
 
         w = h = s_size if "px" in str(s_size) else f"{safe_float(s_size, 40)}%"
@@ -163,7 +130,7 @@ def generate_flyer_html(parsed: dict) -> str:
 
         border_radius = {"circle": "50%", "floral": "50%", "sticker": "20px"}.get(s_type, "15px")
         html_parts.append(f"""
-        <div style="position:absolute; top:{yperc}%; left:{xperc}%;
+        <div style="position:absolute; top:{y_perc}%; left:{x_perc}%;
                     width:{w}; height:{h}; background:{s_color};
                     opacity:{s_opacity}; border-radius:{border_radius};
                     box-shadow:0 12px 30px rgba(0,0,0,0.15);
@@ -171,9 +138,7 @@ def generate_flyer_html(parsed: dict) -> str:
                     z-index:{z_index};"></div>
         """)
 
-    # -----------------------
     # Texts (Foreground Layer)
-    # -----------------------
     for idx, t in enumerate(texts):
         if isinstance(t, dict):
             content = t.get("content", "")
@@ -187,7 +152,7 @@ def generate_flyer_html(parsed: dict) -> str:
         else:
             continue
 
-        xperc, yperc = get_position(pos)
+        x_perc, y_perc = get_position(pos)
 
         # CRITICAL FIX: Z-Index 3 for Text (Always on top)
         z_index = 3
@@ -207,8 +172,10 @@ def generate_flyer_html(parsed: dict) -> str:
 
         # Curved text
         if text_shape == "curved":
-            try: fs = int(str(font_size).replace("px", ""))
-            except: fs = 40
+            try:
+                fs = int(str(font_size).replace("px", ""))
+            except:
+                fs = 40
             radius = max(80, fs * 2 + 20)
             cx, cy = width_px * (xperc / 100), height_px * (yperc / 100)
             path_id = f"curve_path_{idx}"
@@ -227,8 +194,8 @@ def generate_flyer_html(parsed: dict) -> str:
         # Sticker/CTA
         if "sticker" in style_list or content.strip().lower().startswith(("try", "book")):
             pill_w, pill_h = 160, 56
-            left = f"calc({xperc}% - {pill_w/2}px)"
-            top = f"calc({yperc}% - {pill_h/2}px)"
+            left = f"calc({x_perc}% - {pill_w/2}px)"
+            top = f"calc({y_perc}% - {pill_h/2}px)"
             html_parts.append(f"""
             <div style="position:absolute; left:{left}; top:{top}; width:{pill_w}px; height:{pill_h}px;
                         border-radius:{pill_h/2}px; display:flex; align-items:center; justify-content:center;
@@ -243,7 +210,7 @@ def generate_flyer_html(parsed: dict) -> str:
 
         # Standard straight text
         html_parts.append(f"""
-        <div style="position:absolute; top:{yperc}%; left:{xperc}%;
+        <div style="position:absolute; top:{y_perc}%; left:{x_perc}%;
                     transform:translate(-50%,-50%) rotate({angle});
                     font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight};
                     font-style:{font_style_css}; {gradient_css}; text-shadow:{text_shadow_css};
@@ -264,14 +231,8 @@ def generate_flyer_html(parsed: dict) -> str:
     return "\n".join(html_parts)
 
 
-# ==========================================================
-# Node 1: Theme Analyzer
-# ==========================================================
-def theme_analyzer_node(state: FlyerState) -> FlyerState:
-    """
-    Analyze theme, generate JSON plan, AND generate the HTML Skeleton.
-    """
 
+def theme_analyzer_node(state: FlyerState) -> FlyerState:
     user_prompt = state.user_prompt.strip()
     if not user_prompt:
         state.log("❌ Empty prompt. Skipping theme analysis.")
@@ -294,12 +255,7 @@ def theme_analyzer_node(state: FlyerState) -> FlyerState:
             raise ValueError(f"Missing keys in LLM output: {missing}")
 
         state.theme_json = parsed
-
-        # --- 3-NODE WORKFLOW SPECIFIC ---
-        # We generate the HTML Skeleton here.
-        # The Image Agent (Node 2) will take this output and inject images into it.
         state.html_output = generate_flyer_html(parsed)
-
         state.log("✅ Theme analysis completed. JSON plan & HTML skeleton generated.")
 
     except Exception as e:

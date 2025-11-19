@@ -6,7 +6,6 @@ from agents.theme_agent import theme_analyzer_node
 from core.state import FlyerState
 
 
-# Workflow builder
 def create_workflow() -> StateGraph:
     workflow = StateGraph(FlyerState)
 

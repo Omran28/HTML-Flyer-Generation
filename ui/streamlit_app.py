@@ -1,21 +1,18 @@
 import sys, os
-import base64
-import re
-import streamlit as st
-
-# --- YOUR SPECIFIC PATH SETUP ---
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.summary_utils import generate_summary
 from agents.theme_agent import theme_analyzer_node
 from agents.refinement_agent import refinement_node
-from agents.image_agent import image_generator_node
+from agents.image_agent import image_generator_node, inject_images_for_preview
 from core.state import FlyerState
+import streamlit as st
+from core.workflow import create_workflow
 
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append("/content/drive/MyDrive/Beyond HTML Flyer Generation Project/HTML-Flyer-Generation")
 
 
 def create_interface(model, api):
-    # Page config
     st.set_page_config(
         page_title="HTML Flyer Generator",
         page_icon="🏞️",
@@ -64,11 +61,11 @@ def create_interface(model, api):
         render_footer()
 
 
+# Sidebar
 def render_sidebar(model):
     with st.sidebar:
         st.markdown("<div class='sidebar-header'>⚙️ Settings</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='card'><b>LLM Model:</b> {model}</div>", unsafe_allow_html=True)
-
         st.markdown("<div class='sidebar-header'>🔖 Quick Guide</div>", unsafe_allow_html=True)
         st.markdown("""
         <div class='card'>
@@ -82,33 +79,31 @@ def render_sidebar(model):
         """, unsafe_allow_html=True)
 
 
+# Prompt input section
 def render_prompt_section():
     st.markdown("<div class='card'><div class='section-title'>📝 Flyer Instructions</div></div>", unsafe_allow_html=True)
-    user_prompt = st.text_area(
+    return st.text_area(
         label="Flyer Input",
         placeholder="Example: Create a premium green tea poster for Gyokuro with 'Refresh Your Soul' slogan",
         height=180,
         label_visibility="collapsed"
     )
 
-    return user_prompt
 
-
+# Handle generate button
 def handle_generation(user_prompt, api_provider):
     st.markdown("<div class='card'><div class='section-title'>✨ Convert Instructions into Visual</div></div>",
                 unsafe_allow_html=True)
-
     if st.button("🚀 Generate Flyer", type="primary", use_container_width=True):
         st.session_state.generate_clicked = True
         st.session_state.processing_complete = False
         generation_process(user_prompt, api_provider)
 
 
+# Generation workflow
 def generation_process(user_prompt: str, api_provider: str):
     progress_bar = st.progress(0)
     status_text = st.empty()
-    image_path = None
-
     try:
         status_text.info("🚀 Initializing workflow...")
         progress_bar.progress(10)
@@ -116,148 +111,89 @@ def generation_process(user_prompt: str, api_provider: str):
         if not user_prompt or not isinstance(user_prompt, str):
             raise ValueError("Invalid user prompt: must be a non-empty string.")
 
-        # Initialize state
         state = FlyerState(user_prompt=user_prompt.strip(), api_provider=api_provider)
         progress_bar.progress(20)
 
-        # Run nodes (theme -> image -> refine)
-        status_text.info("🎨 Analyzing theme & Building Skeleton...")
+        status_text.info("🎨 Extracting instructions & analyzing theme...")
         state = theme_analyzer_node(state)
-        progress_bar.progress(35)
+        progress_bar.progress(30)
 
-        status_text.info("🖼️ Generating & Injecting images...")
+        status_text.info("🖼️ Generating images...")
         state = image_generator_node(state)
         progress_bar.progress(60)
 
-        status_text.info("🛠️ Refining HTML Layout...")
+        status_text.info("🛠️ Refining the flyer...")
         state = refinement_node(state)
-        progress_bar.progress(70)
+        progress_bar.progress(80)
 
-        # Render final HTML
-        status_text.info("🖼️ Rendering flyer preview...")
-        progress_bar.progress(85)
-
-        # Generate flyer summary
         status_text.info("📝 Generating flyer summary...")
         state.flyer_summary = generate_summary(state.theme_json)
-        progress_bar.progress(95)
+        progress_bar.progress(90)
 
-        # Save to session
         st.session_state.final_state = state
         st.session_state.processing_complete = True
-        st.session_state._latest_image = image_path
-
         progress_bar.progress(100)
         status_text.success("✅ Flyer generated successfully!")
 
     except Exception as e:
-        err_msg = f"{type(e).__name__}: {str(e)}"
-        status_text.error(f"❌ Generation failed: {err_msg}")
+        status_text.error(f"❌ Generation failed: {type(e).__name__}: {e}")
         progress_bar.progress(100)
         st.session_state.processing_complete = True
 
-    finally:
-        st.session_state._latest_image = image_path
 
-
-# ---------------------------------------------------------
-# HELPER: Base64 Image Injection for Preview
-# ---------------------------------------------------------
-def get_image_base64(path):
-    """Reads local file and converts to Base64 so browser can see it."""
-    if not os.path.exists(path): return None
-    with open(path, "rb") as f: return base64.b64encode(f.read()).decode()
-
-
-def inject_images_for_preview(html_content):
-    """
-    CRITICAL FIX: Swaps 'src="flyer_images/x.png"' with 'src="data:image..."'
-    This fixes the broken image icons in Streamlit.
-    """
-    if not html_content: return ""
-
-    # Regex matches src="flyer_images/..." or src='flyer_images/...'
-    matches = re.findall(r'src=["\'](flyer_images/[^"\']+)["\']', html_content)
-    preview_html = html_content
-
-    for img_path in set(matches):
-        # Fix path separators for Windows compatibility
-        local_path = img_path.replace("/", os.sep).replace("\\", os.sep)
-
-        if os.path.exists(local_path):
-            b64_data = get_image_base64(local_path)
-            if b64_data:
-                new_src = f"data:image/png;base64,{b64_data}"
-                preview_html = preview_html.replace(img_path, new_src)
-
-    return preview_html
-
-
-def render_flyer_tab(final_state, tab):
+# Flyer tab
+def render_flyer_tab(final_state: FlyerState, tab):
     with tab:
-        if not final_state or not getattr(final_state, "html_refined", None):
+        if not final_state or not getattr(final_state, "html_final", None):
             st.info("No flyer generated yet.")
             return
 
         st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
                     unsafe_allow_html=True)
 
-        # Use Refined HTML if available, else Final
-        raw_html = final_state.html_refined if final_state.html_refined else final_state.html_final
+        original_html = inject_images_for_preview(final_state.html_final)
+        refined_html = inject_images_for_preview(final_state.html_refined or final_state.html_final)
 
-        # INJECT IMAGES FOR DISPLAY
-        visible_html = inject_images_for_preview(raw_html)
-
-        # Original HTML preview
         st.markdown("### 📝 Original Flyer HTML")
-        st.components.v1.html(visible_html, height=800, scrolling=True)
+        st.components.v1.html(original_html, height=800, scrolling=True)
 
-        # Refined HTML preview (Same logic for now, unless you have both)
-        # st.markdown("### ♻️ Refined Flyer Preview")
-        # st.components.v1.html(visible_html, height=800, scrolling=True)
+        st.markdown("### ♻️ Refined Flyer HTML")
+        st.components.v1.html(refined_html, height=800, scrolling=True)
 
-        # Raw HTML
         with st.expander("🔍 View Raw HTML"):
-            st.code(raw_html, language="html")
+            st.code(final_state.html_refined or final_state.html_final, language="html")
 
 
-def render_summary_tab(final_state, tab):
+# Summary tab
+def render_summary_tab(final_state: FlyerState, tab):
     with tab:
         if not final_state or not getattr(final_state, "flyer_summary", None):
             st.info("No summary available.")
             return
 
-        st.markdown(
-            "<div class='card'><div class='section-title'>📈 Flyer Summary</div></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='card'><div class='section-title'>📈 Flyer Summary</div></div>",
+                    unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="background-color:rgba(255,255,255,0.08);
+                    padding:18px;
+                    border-radius:10px;
+                    color:#f0f0f0;
+                    font-size:16px;
+                    line-height:1.6;
+                    text-align:justify;">
+            {final_state.flyer_summary}
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
-            <div style="
-                background-color:rgba(255,255,255,0.08);
-                padding:18px;
-                border-radius:10px;
-                color:#f0f0f0;
-                font-size:16px;
-                line-height:1.6;
-                text-align:justify;">
-                {final_state.flyer_summary}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # JSON
         with st.expander("🧩 Theme JSON"):
             st.json(final_state.theme_json)
 
 
-def render_refinement_review_tab(final_state, tab):
+# Refinement tab
+def render_refinement_review_tab(final_state: FlyerState, tab):
     with tab:
         st.markdown("<div class='card'><div class='section-title'>🔍 Refinement Review</div></div>",
                     unsafe_allow_html=True)
-
         evaluation = getattr(final_state, "evaluation_json", {})
         if evaluation and "judgment" in evaluation:
             st.info(f"**AI Layout Critique:**\n\n{evaluation['judgment']}")
@@ -265,23 +201,22 @@ def render_refinement_review_tab(final_state, tab):
             st.warning("No refinement review data found.")
 
 
+# Results overview
 def render_results():
     st.divider()
     st.header("📊 Results Overview")
-
     final_state = st.session_state.get("final_state", None)
-
     if not final_state:
         st.info("✏️ Write your flyer instructions above and click **Generate** to see the results.")
         return
 
-    # 3 Tabs
     tabs = st.tabs(["🏞️ Generated Flyer", "📈 Flyer Summary", "🔍 Refinement Review"])
     render_flyer_tab(final_state, tabs[0])
     render_summary_tab(final_state, tabs[1])
     render_refinement_review_tab(final_state, tabs[2])
 
 
+# Footer
 def render_footer():
     st.divider()
     st.markdown(

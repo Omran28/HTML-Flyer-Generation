@@ -1,15 +1,9 @@
-"""
-Refinement Agent
-• Reviews flyer HTML using LLM and improves layout, text readability, and balance.
-• Uses .invoke() to allow compatibility with LangChain models.
-"""
-
 import re, json, os
 from core.state import FlyerState
 from utils.prompt_utils import refinement_prompt
 from models.llm_model import initialize_llm
 
-# Initialize model
+
 model = initialize_llm()
 
 
@@ -20,14 +14,11 @@ def refinement_node(state: FlyerState) -> FlyerState:
     prompt = refinement_prompt.replace("{html_final}", state.html_final)
 
     try:
-        # --- FIX: Use .invoke() instead of .generate_content() ---
         response = model.invoke(prompt)
-
-        # Handle response content (LangChain returns an object with .content)
         result_text = getattr(response, "content", str(response)).strip()
 
         # Extract JSON
-        json_match = re.search(r"\{.*\}", result_text, re.DOTALL)
+        json_match = re.search(r"\{.*}", result_text, re.DOTALL)
         if json_match:
             result = json.loads(json_match.group(0))
             state.evaluation_json = result
@@ -65,13 +56,8 @@ def save_refined_html(state):
     if not hasattr(state, "html_refined") or not state.html_refined:
         raise ValueError("No refined HTML found in state.html_refined")
 
-    # Default file path
     output_path = "flyer_refined.html"
-
-    # Ensure directory exists
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-
-    # Write the HTML
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(state.html_refined)
 

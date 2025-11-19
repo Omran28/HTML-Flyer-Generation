@@ -23,5 +23,3 @@ if MODEL_MODE == "flash":
 
 if ACTIVE_API_KEY:
     os.environ["GOOGLE_API_KEY"] = ACTIVE_API_KEY
-
-print(f"\nModel Used: {ACTIVE_MODEL}")
