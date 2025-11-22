@@ -8,10 +8,10 @@ import base64
 # Initialize Stable Diffusion once
 pipe = DiffusionPipeline.from_pretrained(
     "runwayml/stable-diffusion-v1-5",
-    torch_dtype=torch.float32,
+    torch_dtype=torch.float16,
     use_safetensors=True
 )
-pipe.to("cpu")
+pipe.to("cuda")
 
 
 # -------------------------------
