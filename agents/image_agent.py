@@ -177,9 +177,7 @@ def image_generator_node(state: FlyerState) -> FlyerState:
 
         # Save HTML with images embedded
         original_with_images = inject_images_for_preview(state.html_final)
-        save_html(state, filename="flyer_original.html", html_attr=None, content_override=original_with_images)
-
-        output_path = save_html(state)
+        output_path = save_html(state, filename="flyer_original.html", html_attr=None, content_override=original_with_images)
         state.log(f"💾 HTML with images saved to: {output_path}")
 
 

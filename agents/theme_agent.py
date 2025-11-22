@@ -3,20 +3,15 @@ from core.state import FlyerState
 from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
 
-
-
 def safe_float(value, default=0.0):
+    """Extract a float from various string formats like '40%', 'px', 'width:40px'."""
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
         cleaned = (
-            value.replace('%', '')
-                 .replace('width', '')
-                 .replace('height', '')
-                 .replace(',', '')
-                 .replace('px', '')
-                 .split()[0]
-                 .strip()
+            value.replace('%', '').replace('px', '')
+                 .replace('width', '').replace('height', '')
+                 .replace(',', '').split()[0].strip()
         )
         try:
             return float(cleaned)
@@ -24,68 +19,54 @@ def safe_float(value, default=0.0):
             return default
     return default
 
-
 def get_position(pos_str: str):
+    """Convert fuzzy or custom position strings into (x%, y%) coordinates."""
     if not pos_str:
         return 50, 50
-
-    s = str(pos_str).lower().strip()
-
-    # 1. Handle "custom (50%, 20%)" from JSON
+    s = str(pos_str).lower()
     if "custom" in s or "%" in s:
-        # Extract all numbers (integers or floats)
         nums = re.findall(r"[\d.]+", s)
         if len(nums) >= 2:
-            # Return the first two numbers found as (x, y)
             return float(nums[0]), float(nums[1])
-
-
-    # 2. Fuzzy Matching for standard words
-    if "top" in s and "left" in s: return 8, 8
-    if "top" in s and "right" in s: return 92, 8
-    if "top" in s and "center" in s: return 50, 8
-
-    if "bottom" in s and "left" in s: return 8, 92
-    if "bottom" in s and "right" in s: return 92, 92
-    if "bottom" in s and "center" in s: return 50, 92
-
-    if "center" in s: return 50, 50
-
-    # Edge centers
-    if "left" in s: return 6, 50
-    if "right" in s: return 94, 50
-    if "top" in s: return 50, 6
-    if "bottom" in s: return 50, 94
-
-    # Default fallback
+    # Predefined positions
+    mapping = {
+        "top left": (8, 8), "top center": (50, 8), "top right": (92, 8),
+        "center": (50, 50), "bottom left": (8, 92), "bottom center": (50, 92),
+        "bottom right": (92, 92), "left": (6, 50), "right": (94, 50),
+        "top": (50, 6), "bottom": (50, 94)
+    }
+    for key, val in mapping.items():
+        if key in s: return val
     return 50, 50
-
 
 def get_valid_color(color_str: str, default="#333333") -> str:
     if not color_str: return default
-
     if "gradient" in str(color_str).lower():
-        # Extract the first hex code found
-        match = re.search(r"#[0-9a-fA-F]{6}", str(color_str))
+        match = re.search(r"#[0-9a-fA-F]{6}", color_str)
         return match.group(0) if match else default
-
     return color_str
 
-
-
 def generate_flyer_html(parsed: dict) -> str:
+    """
+    Generate creative flyer HTML from LLM JSON.
+    - Background shapes (waves, rectangles, circles)
+    - Foreground images (dynamic positioning)
+    - Texts (headings, subtitles, CTA)
+    - Overlay effects (shadow, glow, gradient)
+    """
     theme = parsed.get("theme", {})
     texts = parsed.get("texts", [])
+    images = parsed.get("images", [])
     layout = parsed.get("layout", {})
     shapes = layout.get("layout_shapes", [])
 
     width_px, height_px = 800, 600
-    bg_color = layout.get("background", {}).get("color", theme.get("theme_colors", ["#FFFFFF"])[0])
+    bg_color = layout.get("background", {}).get("color", theme.get("theme_colors", ["#F8FBF8"])[0])
 
     html_parts = [
         f"""<div style="width:{width_px}px; height:{height_px}px; border-radius:20px; overflow:hidden;
                         position:relative; background:{bg_color}; font-family:sans-serif;">""",
-        # Global gradients (Premium feel)
+        # Global gradient definitions
         """
         <svg width="0" height="0" style="position:absolute">
           <defs>
@@ -98,24 +79,17 @@ def generate_flyer_html(parsed: dict) -> str:
         """
     ]
 
-    # Shapes (Background Layer)
+    # ---------------------------
+    # Background Shapes / Layers
+    # ---------------------------
     for shape in shapes:
         s_type = shape.get("shape", "rectangle")
         s_pos = shape.get("position", "Center")
         s_size = shape.get("size", "40%")
-
-        # SVG gradient
-        s_color_raw = shape.get("color", "#FFFFFF")
-        s_color = get_valid_color(s_color_raw)
-
-        # Limit opacity so text is visible behind shapes
+        s_color = get_valid_color(shape.get("color", "#FFFFFF"))
         s_opacity = min(safe_float(shape.get("opacity", 0.9), 0.9), 0.6)
-
-        x_perc, y_perc = get_position(s_pos)
-
-        # Z-Index 0 for shapes
+        x, y = get_position(s_pos)
         z_index = 0
-
         w = h = s_size if "px" in str(s_size) else f"{safe_float(s_size, 40)}%"
 
         if s_type == "wave":
@@ -130,7 +104,7 @@ def generate_flyer_html(parsed: dict) -> str:
 
         border_radius = {"circle": "50%", "floral": "50%", "sticker": "20px"}.get(s_type, "15px")
         html_parts.append(f"""
-        <div style="position:absolute; top:{y_perc}%; left:{x_perc}%;
+        <div style="position:absolute; top:{y}%; left:{x}%;
                     width:{w}; height:{h}; background:{s_color};
                     opacity:{s_opacity}; border-radius:{border_radius};
                     box-shadow:0 12px 30px rgba(0,0,0,0.15);
@@ -138,23 +112,41 @@ def generate_flyer_html(parsed: dict) -> str:
                     z-index:{z_index};"></div>
         """)
 
-    # Texts (Foreground Layer)
-    for idx, t in enumerate(texts):
-        if isinstance(t, dict):
-            content = t.get("content", "")
-            font_style = t.get("font_style", "sans-serif")
-            font_size = t.get("font_size", "40px")
-            color = t.get("font_color", "#000000")
-            angle = t.get("angle", "0deg")
-            text_shape = t.get("text_shape", "straight")
-            style_list = t.get("style", []) or []
-            pos = t.get("position", "Center")
-        else:
-            continue
+    # ---------------------------
+    # Foreground Images
+    # ---------------------------
+    for idx, img in enumerate(images):
+        if not isinstance(img, dict): continue
+        path = img.get("path", "")
+        if not path: continue
+        x, y = get_position(img.get("position", "Center"))
+        size = img.get("size", "40%")
+        width = height = size if "%" in str(size) else f"{safe_float(size, 40)}%"
+        z_index = 2 if "background" not in img.get("layer", "foreground") else 0
 
-        x_perc, y_perc = get_position(pos)
+        html_parts.append(f"""
+        <img src="{path}" 
+             style="position:absolute; top:{y}%; left:{x}%;
+                    width:{width}; height:{height};
+                    transform:translate(-50%, -50%);
+                    z-index:{z_index}; border-radius:15px; object-fit:cover;"/>
+        """)
 
-        # CRITICAL FIX: Z-Index 3 for Text (Always on top)
+    # ---------------------------
+    # Text Layers
+    # ---------------------------
+    for t in texts:
+        if not isinstance(t, dict): continue
+        content = t.get("content", "")
+        font_style = t.get("font_style", "sans-serif")
+        font_size = t.get("font_size", "40px")
+        color = t.get("font_color", "#000000")
+        angle = t.get("angle", "0deg")
+        style_list = t.get("style", []) or []
+        pos = t.get("position", "Center")
+        text_shape = t.get("text_shape", "straight")
+        x, y = get_position(pos)
+
         z_index = 3
         font_weight = "700" if "bold" in style_list else "400"
         font_style_css = "italic" if "italic" in style_list else "normal"
@@ -170,18 +162,14 @@ def generate_flyer_html(parsed: dict) -> str:
             else f"color:{color};"
         )
 
-        # Curved text
         if text_shape == "curved":
-            try:
-                fs = int(str(font_size).replace("px", ""))
-            except:
-                fs = 40
-            radius = max(80, fs * 2 + 20)
-            cx, cy = width_px * (xperc / 100), height_px * (yperc / 100)
+            # Curved text as SVG path
+            fs = int(str(font_size).replace("px", "") or 40)
+            radius = max(80, fs*2 + 20)
             path_id = f"curve_path_{idx}"
             html_parts.append(f"""
             <svg style="position:absolute; left:0; top:0; width:{width_px}px; height:{height_px}px; z-index:{z_index}; pointer-events:none;">
-              <defs><path id="{path_id}" d="M {cx-radius} {cy} A {radius} {radius} 0 0 1 {cx+radius} {cy}" /></defs>
+              <defs><path id="{path_id}" d="M {width_px/2-radius} {height_px/2} A {radius} {radius} 0 0 1 {width_px/2+radius} {height_px/2}" /></defs>
               <text style="font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight}; font-style:{font_style_css};">
                 <textPath href="#{path_id}" startOffset="50%" text-anchor="middle" style="fill:{color}; text-shadow:{text_shadow_css};">
                   {content}
@@ -191,27 +179,9 @@ def generate_flyer_html(parsed: dict) -> str:
             """)
             continue
 
-        # Sticker/CTA
-        if "sticker" in style_list or content.strip().lower().startswith(("try", "book")):
-            pill_w, pill_h = 160, 56
-            left = f"calc({x_perc}% - {pill_w/2}px)"
-            top = f"calc({y_perc}% - {pill_h/2}px)"
-            html_parts.append(f"""
-            <div style="position:absolute; left:{left}; top:{top}; width:{pill_w}px; height:{pill_h}px;
-                        border-radius:{pill_h/2}px; display:flex; align-items:center; justify-content:center;
-                        background:linear-gradient(90deg,#388E3C,#A5D6A7);
-                        box-shadow:0 12px 35px rgba(56,142,60,0.25); z-index:{z_index};">
-              <span style="font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight}; color:#F8F4EA;">
-                {content}
-              </span>
-            </div>
-            """)
-            continue
-
-        # Standard straight text
         html_parts.append(f"""
-        <div style="position:absolute; top:{y_perc}%; left:{x_perc}%;
-                    transform:translate(-50%,-50%) rotate({angle});
+        <div style="position:absolute; top:{y}%; left:{x}%;
+                    transform:translate(-50%, -50%) rotate({angle});
                     font-family:{font_style}; font-size:{font_size}; font-weight:{font_weight};
                     font-style:{font_style_css}; {gradient_css}; text-shadow:{text_shadow_css};
                     z-index:{z_index}; text-align:center; white-space:nowrap;">
@@ -219,18 +189,17 @@ def generate_flyer_html(parsed: dict) -> str:
         </div>
         """)
 
-    # Glossy overlay for premium depth
+    # ---------------------------
+    # Premium overlay for depth
+    # ---------------------------
     html_parts.append("""
     <div style="position:absolute; inset:0; border-radius:20px;
                 box-shadow: inset 0 0 80px rgba(255,255,255,0.03),
                             inset 0 -30px 80px rgba(0,0,0,0.06);
                 z-index:10; pointer-events:none;"></div>
     """)
-    html_parts.append("</div>")
-
+    html_parts.append("</div>")  # Closing main div
     return "\n".join(html_parts)
-
-
 
 def theme_analyzer_node(state: FlyerState) -> FlyerState:
     user_prompt = state.user_prompt.strip()
@@ -240,8 +209,8 @@ def theme_analyzer_node(state: FlyerState) -> FlyerState:
         return state
 
     llm = initialize_llm()
-    state.log(f"⚙️ Using Gemini model for theme analysis.")
     llm_prompt = THEME_ANALYZER_PROMPT.replace("{user_prompt}", user_prompt)
+    state.log("⚙️ Using Gemini model for theme analysis.")
 
     try:
         response = llm.invoke(llm_prompt)
@@ -256,11 +225,10 @@ def theme_analyzer_node(state: FlyerState) -> FlyerState:
 
         state.theme_json = parsed
         state.html_output = generate_flyer_html(parsed)
-        state.log("✅ Theme analysis completed. JSON plan & HTML skeleton generated.")
+        state.log("✅ Theme analysis completed. JSON plan & creative HTML generated.")
 
     except Exception as e:
-        err = f"❌ Unexpected error during theme generation: {e}"
-        state.log(err)
+        state.log(f"❌ Error during theme generation: {e}")
         state.theme_json = {"error": str(e)}
         state.html_output = "<p style='color:red'>Error generating flyer theme.</p>"
 
