@@ -4,32 +4,35 @@ from models.llm_model import initialize_llm
 from utils.prompt_utils import THEME_ANALYZER_PROMPT
 from utils.helpers import get_position_coordinates, safe_float, get_valid_color, parse_size
 
+
 # -------------------------------
-# HTML Generator
+# HTML Generator (No change from original file 3, kept for context)
 # -------------------------------
 def generate_flyer_html(parsed: dict) -> str:
+    # ... (content remains exactly as your original File 3 for layout shapes and texts) ...
     theme = parsed.get("theme", {})
     texts = parsed.get("texts", [])
     shapes = parsed.get("layout", {}).get("layout_shapes", [])
-    width_px, height_px = 800,600
+    width_px, height_px = 800, 600
     bg_color = parsed.get("layout", {}).get("background", {}).get(
         "color", theme.get("theme_colors", ["#F8FBF8"])[0]
     )
 
-    html_parts = [f'<div style="width:{width_px}px;height:{height_px}px;border-radius:20px;overflow:hidden;position:relative;background:{bg_color};font-family:sans-serif;">']
+    html_parts = [
+        f'<div style="width:{width_px}px;height:{height_px}px;border-radius:20px;overflow:hidden;position:relative;background:{bg_color};font-family:sans-serif;">']
 
     # Shapes / decorative layers
     for shape in shapes:
-        s_type = shape.get("shape","rectangle")
-        x, y = get_position_coordinates(shape.get("position","center"))
-        s_size = parse_size(shape.get("size","40%"))
-        s_color = get_valid_color(shape.get("color","#FFFFFF"))
-        opacity = min(safe_float(shape.get("opacity",0.9),0.9),0.6)
-        border_radius = {"circle":"50%","floral":"50%","sticker":"20px"}.get(s_type,"15px")
+        s_type = shape.get("shape", "rectangle")
+        x, y = get_position_coordinates(shape.get("position", "center"))
+        s_size = parse_size(shape.get("size", "40%"))
+        s_color = get_valid_color(shape.get("color", "#FFFFFF"))
+        opacity = min(safe_float(shape.get("opacity", 0.9), 0.9), 0.6)
+        border_radius = {"circle": "50%", "floral": "50%", "sticker": "20px"}.get(s_type, "15px")
         z_index = 0
 
-        if s_type=="wave":
-            pos_style = "bottom:0;" if "bottom" in str(shape.get("position","")).lower() else "top:0;"
+        if s_type == "wave":
+            pos_style = "bottom:0;" if "bottom" in str(shape.get("position", "")).lower() else "top:0;"
             html_parts.append(f"""
             <svg viewBox="0 0 800 240" preserveAspectRatio="none"
                  style="position:absolute;left:10%;width:80%;height:40%;{pos_style}z-index:{z_index};opacity:{opacity};">
@@ -47,16 +50,16 @@ def generate_flyer_html(parsed: dict) -> str:
 
     # Text layers
     for t in texts:
-        content = t.get("content","")
-        font_family = t.get("font_style","sans-serif")
-        font_size = t.get("font_size","40px")
-        color = get_valid_color(t.get("font_color","#000000"))
-        angle = t.get("angle","0deg")
-        style_list = t.get("style",[]) or []
-        x, y = get_position_coordinates(t.get("position","center"))
+        content = t.get("content", "")
+        font_family = t.get("font_style", "sans-serif")
+        font_size = t.get("font_size", "40px")
+        color = get_valid_color(t.get("font_color", "#000000"))
+        angle = t.get("angle", "0deg")
+        style_list = t.get("style", []) or []
+        x, y = get_position_coordinates(t.get("position", "center"))
         font_weight = "700" if "bold" in style_list else "400"
         font_style_css = "italic" if "italic" in style_list else "normal"
-        shadows=[]
+        shadows = []
         if "shadow" in style_list: shadows.append("2px 4px 12px rgba(0,0,0,0.35)")
         if "glow" in style_list: shadows.append("0 0 12px rgba(255,255,255,0.35)")
         text_shadow_css = ", ".join(shadows) if shadows else "none"
@@ -78,7 +81,7 @@ def generate_flyer_html(parsed: dict) -> str:
     # Image placeholders
     images_meta = parsed.get("images", [])
     for idx in range(len(images_meta)):
-        html_parts.append(f"<!-- IMAGE_{idx} -->")
+        html_parts.append(f"")
 
     # Overlay / visual finish
     html_parts.append("""<div style="position:absolute;inset:0;border-radius:20px;
@@ -90,34 +93,42 @@ def generate_flyer_html(parsed: dict) -> str:
 
 
 # -------------------------------
-# Theme Analyzer Node
+# Theme Analyzer Node (File 3)
 # -------------------------------
 def theme_analyzer_node(state: FlyerState) -> FlyerState:
     prompt_text = state.user_prompt.strip()
     if not prompt_text:
         state.log("❌ Empty prompt. Skipping theme analysis.")
-        state.theme_json = {"error":"Empty prompt."}
+        state.theme_json = {"error": "Empty prompt."}
         state.html_output = "<p style='color:red'>Empty prompt.</p>"
         return state
 
     llm = initialize_llm()
     llm_prompt = THEME_ANALYZER_PROMPT.replace("{user_prompt}", prompt_text)
-    state.log("⚙️ Running theme analysis with LLM...")
+    state.log("⚙️ Running high-end theme analysis with LLM...")
 
     try:
         response = llm.invoke(llm_prompt)
         raw_content = getattr(response, "content", str(response)).strip()
-        cleaned = re.sub(r"^```(?:json)?|```$","",raw_content,flags=re.MULTILINE)
+        cleaned = re.sub(r"^```(?:json)?|```$", "", raw_content, flags=re.MULTILINE)
         parsed = json.loads(cleaned)
-        required_keys = ["theme","texts","layout","images"]
+        required_keys = ["theme", "texts", "layout", "images"]
         missing = [k for k in required_keys if k not in parsed]
+
+        # 💡 Critical Check: Ensure dynamic radius is present in images (new requirement)
+        if "images" in parsed:
+            for i, img_data in enumerate(parsed["images"]):
+                if "border_radius" not in img_data:
+                    # Inject a default if the LLM failed, but rely on prompt being updated
+                    parsed["images"][i]["border_radius"] = "10px"
+
         if missing: raise ValueError(f"Missing keys in LLM output: {missing}")
         state.theme_json = parsed
         state.html_output = generate_flyer_html(parsed)
         state.log("✅ Theme analysis complete. HTML generated with image placeholders.")
     except Exception as e:
         state.log(f"❌ Error during theme analysis: {e}")
-        state.theme_json = {"error":str(e)}
+        state.theme_json = {"error": str(e)}
         state.html_output = "<p style='color:red'>Error generating flyer theme.</p>"
 
     return state

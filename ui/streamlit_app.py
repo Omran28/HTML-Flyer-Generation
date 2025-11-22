@@ -4,9 +4,8 @@ from agents.theme_agent import theme_analyzer_node
 from agents.refinement_agent import refinement_node
 from agents.image_agent import image_generator_node, inject_images_for_preview
 from core.state import FlyerState
+from utils.helpers import inject_images_for_display
 import streamlit as st
-from core.workflow import create_workflow
-
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append("/content/drive/MyDrive/Beyond HTML Flyer Generation Project/HTML-Flyer-Generation")
@@ -151,8 +150,12 @@ def render_flyer_tab(final_state: FlyerState, tab):
         st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
                     unsafe_allow_html=True)
 
-        # Inject images as base64 for Streamlit display
-        original_html_with_images = inject_images_for_preview(final_state.html_final)
+        # 1. Temporarily inject <img> tags into original HTML (using the helper from utils.helpers)
+        original_html_with_img_tags = inject_images_for_display(final_state)
+        # 2. Convert image paths to base64 for Streamlit display
+        original_html_with_images = inject_images_for_preview(original_html_with_img_tags)
+
+        # Refined HTML is already prepared by the refinement node
         refined_html_with_images = inject_images_for_preview(final_state.html_refined or final_state.html_final)
 
         # Display HTML in Streamlit
