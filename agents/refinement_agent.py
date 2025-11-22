@@ -1,6 +1,6 @@
 import re, json
 from core.state import FlyerState
-from utils.helpers import inject_images_for_preview, get_position_coordinates, save_html
+from utils.helpers import inject_images_for_preview, get_position_coordinates, save_html, parse_size
 from models.llm_model import initialize_llm
 from utils.prompt_utils import refinement_prompt
 
