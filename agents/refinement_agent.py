@@ -2,10 +2,9 @@ import re, json, os
 from core.state import FlyerState
 from utils.prompt_utils import refinement_prompt
 from models.llm_model import initialize_llm
-
+from agents.image_agent import inject_images_for_preview, save_html
 
 model = initialize_llm()
-
 
 def refinement_node(state: FlyerState) -> FlyerState:
     state.log(f"[refinement_node] Iteration {state.iteration_count} — sending HTML to Gemini for review & edit.")
@@ -42,23 +41,12 @@ def refinement_node(state: FlyerState) -> FlyerState:
     state.log(
         f"Iteration {state.iteration_count} completed. Judgment: {state.evaluation_json.get('judgment', 'No judgment')}")
 
-    # Save automatically if html_refined exists
+    # Save refined HTML
     if state.html_refined:
-        output_path = save_refined_html(state)
-        state.log(f"💾 Refined HTML saved to: {output_path}")
+        refined_with_images = inject_images_for_preview(state.html_refined)
+        output_path = save_html(state, filename="flyer_refined.html", html_attr=None, content_override=refined_with_images)
+        state.log(f"💾 Refined HTML with images saved to: {output_path}")
     else:
         state.log("⚠️ No HTML to save after refinement.")
 
     return state
-
-
-def save_refined_html(state):
-    if not hasattr(state, "html_refined") or not state.html_refined:
-        raise ValueError("No refined HTML found in state.html_refined")
-
-    output_path = "flyer_refined.html"
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(state.html_refined)
-
-    return os.path.abspath(output_path)

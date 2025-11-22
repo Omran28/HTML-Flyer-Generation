@@ -151,16 +151,21 @@ def render_flyer_tab(final_state: FlyerState, tab):
         st.markdown("<div class='card'><div class='section-title'>🏞️ Generated Flyer Preview</div></div>",
                     unsafe_allow_html=True)
 
-        original_html = inject_images_for_preview(final_state.html_final)
-        refined_html = inject_images_for_preview(final_state.html_refined or final_state.html_final)
+        # Inject images as base64 for Streamlit display
+        original_html_with_images = inject_images_for_preview(final_state.html_final)
+        refined_html_with_images = inject_images_for_preview(final_state.html_refined or final_state.html_final)
 
+        # Display HTML in Streamlit
         st.markdown("### 📝 Original Flyer HTML")
-        st.components.v1.html(original_html, height=800, scrolling=True)
+        st.components.v1.html(original_html_with_images, height=800, scrolling=True)
 
         st.markdown("### ♻️ Refined Flyer HTML")
-        st.components.v1.html(refined_html, height=800, scrolling=True)
+        st.components.v1.html(refined_html_with_images, height=800, scrolling=True)
 
-        with st.expander("🔍 View Raw HTML"):
+        # Show raw HTML
+        with st.expander("🔍 View Original HTML"):
+            st.code(final_state.html_final, language="html")
+        with st.expander("🔍 View Refined HTML"):
             st.code(final_state.html_refined or final_state.html_final, language="html")
 
 

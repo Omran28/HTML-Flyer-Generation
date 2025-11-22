@@ -40,13 +40,13 @@ def save_image_locally(img, index, folder="flyer_images"):
     return file_path.replace("\\", "/")
 
 
-def save_html(state: FlyerState, filename="flyer_output.html", html_attr="html_final") -> str:
-    """Save HTML from a state attribute (html_final or html_refined)."""
-    content = getattr(state, html_attr, "")
+def save_html(state: FlyerState, filename="flyer_output.html", html_attr="html_final", content_override=None) -> str:
+    content = content_override if content_override is not None else getattr(state, html_attr, "")
     os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
     with open(filename, "w", encoding="utf-8") as f:
         f.write(content)
     return os.path.abspath(filename)
+
 
 
 def get_image_base64(path: str):
@@ -174,8 +174,15 @@ def image_generator_node(state: FlyerState) -> FlyerState:
             state.html_final = html + img_tags
 
         state.generated_images = [img["path"] for img in generated_images_data]
+
+        # Save HTML with images embedded
+        original_with_images = inject_images_for_preview(state.html_final)
+        save_html(state, filename="flyer_original.html", html_attr=None, content_override=original_with_images)
+
         output_path = save_html(state)
         state.log(f"💾 HTML with images saved to: {output_path}")
+
+
 
     except Exception as e:
         state.log(f"❌ [image_generator_node] Critical Error: {str(e)}")
